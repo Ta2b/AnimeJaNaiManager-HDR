@@ -1,0 +1,43 @@
+name: Build AnimeJaNai Manager (HDR)
+
+# Builds the HDR-settings variant of the Manager on every push to hdr-settings and
+# publishes it as a release, so the exe can be downloaded without authentication.
+on:
+  push:
+    branches: [hdr-settings, hdr-settings-0.8]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.x'  # Must match <TargetFramework> in AnimeJaNaiConfEditor.csproj
+
+    - name: Publish self-contained single-file win-x64
+      run: dotnet publish AnimeJaNaiConfEditor/AnimeJaNaiConfEditor.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+
+    - name: Stage
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Path staging | Out-Null
+        Copy-Item publish\AnimeJaNaiManager.exe staging\AnimeJaNaiManager-HDR.exe
+        Copy-Item publish\*.dll staging\
+        Compress-Archive -Path staging\* -DestinationPath AnimeJaNaiManager-HDR-x64.zip -Force
+
+    - name: Publish release
+      uses: ncipollo/release-action@v1
+      with:
+        tag: hdr-build-${{ github.run_number }}
+        name: AnimeJaNai Manager (HDR) build ${{ github.run_number }} (${{ github.ref_name }})
+        commit: ${{ github.sha }}
+        body: Built from ${{ github.sha }} on branch ${{ github.ref_name }}.
+        draft: false
+        prerelease: true
+        artifacts: AnimeJaNaiManager-HDR-x64.zip,staging/AnimeJaNaiManager-HDR.exe
+        token: ${{ secrets.GITHUB_TOKEN }}
