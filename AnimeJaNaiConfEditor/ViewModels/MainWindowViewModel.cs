@@ -25,6 +25,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         {
             Instance = this;
             AnimeJaNaiConf = ReadAnimeJaNaiConf(AnimeJaNaiConfPath, true);
+            HdrSettings = new HdrSettings(HdrConfPath);
             // Built after the user conf loads so the read-only default profiles reflect the saved
             // standard/sharp preset.
             RefreshDefaultProfiles();
@@ -84,10 +85,29 @@ namespace AnimeJaNaiConfEditor.ViewModels
             set => this.RaiseAndSetIfChanged(ref _rifeMissing, value);
         }
 
+        // ---- display upscaling and HDR (portable_config/script-opts/animejanai_hdr_auto.conf) ----
+        public HdrSettings HdrSettings { get; }
+
+        public string[] HdrTargetResolutions { get; } =
+            ["auto", "1920x1080", "2560x1440", "3440x1440", "3840x1600", "3840x2160", "5120x2160", "5120x2880", "7680x4320"];
+
+        public string HdrConfPath => Path.Combine(RootDir, "portable_config", "script-opts", "animejanai_hdr_auto.conf");
+
+        // RTX Video HDR needs an NVIDIA GPU; unknown (detection pending) keeps it selectable.
+        private bool _rtxHdrSelectable = true;
+        public bool RtxHdrSelectable
+        {
+            get => _rtxHdrSelectable;
+            set => this.RaiseAndSetIfChanged(ref _rtxHdrSelectable, value);
+        }
+
         public void RefreshComponentAwareness()
         {
             bool trtInstalled = TrtOnDisk();
             bool? nvidia = ComponentManager.GpuNvidia;
+            RtxHdrSelectable = nvidia != false;
+            HdrSettings.Nvidia.IsThisPc = nvidia == true;
+            HdrSettings.Amd.IsThisPc = nvidia == false;
             bool trtUsable = trtInstalled && nvidia != false;
             TrtSelectable = trtUsable;
 

@@ -14,7 +14,7 @@
         x:Class="AnimeJaNaiConfEditor.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/logo.ico"
-        Title="AnimeJaNai Manager">
+        Title="AnimeJaNai Manager (HDR)">
 
   <Window.Resources>
     <local:HelpTextConverter x:Key="HelpText" />
@@ -277,6 +277,199 @@
             </Grid>
 
             <TextBlock Margin="10,0,0,10" Classes="help" TextWrapping="Wrap">Subtitle rendering changes take effect after you restart the player.</TextBlock>
+
+            <!-- ===== Display Upscaling & HDR (portable_config/script-opts/animejanai_hdr_auto.conf) ===== -->
+            <Separator Margin="10,10,0,10" />
+
+            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
+              <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Upscale to Display</TextBlock>
+                <ToggleButton IsChecked="{Binding HdrSettings.UpscaleAuto}" Content="Auto" />
+                <ToggleButton IsChecked="{Binding HdrSettings.UpscaleNvidia}" Content="RTX Video Super Resolution" IsEnabled="{Binding RtxHdrSelectable}" />
+                <ToggleButton IsChecked="{Binding HdrSettings.UpscaleAmd}" Content="AMD VideoSR" />
+                <ToggleButton IsChecked="{Binding HdrSettings.UpscaleClassic}" Content="Standard" />
+                <ToggleButton IsChecked="{Binding HdrSettings.UpscaleOff}" Content="Off" />
+              </StackPanel>
+              <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve">Final scaling after AnimeJaNai, up to the target resolution. <Bold>Auto</Bold>: RTX Video Super Resolution on NVIDIA, AMD VideoSR on AMD, standard GPU scaling elsewhere. <Bold>Standard</Bold>: Direct3D 11 scaling on any GPU. <Bold>Off</Bold>: the player only fits the video to the window.</TextBlock>
+            </Grid>
+
+            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
+              <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Target Resolution</TextBlock>
+                <ui:FAComboBox IsEditable="True" Width="140" MaxDropDownHeight="600" Text="{Binding HdrSettings.TargetResolution, Mode=TwoWay}"
+                               ItemsSource="{Binding HdrTargetResolutions}" />
+              </StackPanel>
+              <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve"><Bold>auto</Bold>: the resolution of the screen the player is on. Or a fixed size such as 2560x1440. The aspect ratio is always kept; this does not change the Windows display resolution.</TextBlock>
+            </Grid>
+
+            <Grid ColumnDefinitions="Auto,*" Margin="10,10,0,10">
+              <CheckBox Grid.Column="0" IsChecked="{Binding HdrSettings.HdrConversion}" Content="SDR to HDR Conversion" />
+              <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" TextWrapping="Wrap" xml:space="preserve"><Bold>On</Bold>: SDR videos are converted to HDR on HDR displays, with the look set below. Native HDR videos always play in HDR.
+<Bold>Off</Bold>: SDR videos stay SDR and the player never changes the Windows HDR setting.</TextBlock>
+            </Grid>
+
+            <StackPanel IsEnabled="{Binding HdrSettings.HdrConversion}" Margin="10,0,0,10">
+
+              <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="0,10,0,10">
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                  <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">SDR to HDR Backend</TextBlock>
+                  <ToggleButton IsChecked="{Binding HdrSettings.BackendAuto}" Content="Auto" />
+                  <ToggleButton IsChecked="{Binding HdrSettings.BackendRtx}" Content="RTX Video HDR" IsEnabled="{Binding RtxHdrSelectable}" />
+                  <ToggleButton IsChecked="{Binding HdrSettings.BackendMpv}" Content="mpv" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve"><Bold>Auto</Bold>: RTX Video HDR on NVIDIA, mpv on AMD and Intel. <Bold>RTX Video HDR</Bold>: NVIDIA's AI conversion; its own brightness, contrast and saturation are set in the NVIDIA App. <Bold>mpv</Bold>: works on every GPU; SDR white is placed at the SDR White Level and the enhancement creates the highlights.</TextBlock>
+              </Grid>
+
+              <TextBlock Margin="0,10,0,5" Text="HDR Enhancement" />
+              <Border Classes="border">
+                <StackPanel Margin="10">
+                  <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
+                    <CheckBox Grid.Column="0" IsChecked="{Binding HdrSettings.Enhance}" Content="Enhance HDR Picture" />
+                    <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" TextWrapping="Wrap">Deeper blacks, brighter highlights and richer colors, applied after the conversion. Skin tones are protected. Ctrl+G in the player compares with and without.</TextBlock>
+                  </Grid>
+
+                  <StackPanel IsEnabled="{Binding HdrSettings.EnhancementControlsEnabled}">
+                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
+                      <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Black Depth" />
+                        <NumericUpDown Value="{Binding HdrSettings.BlackDepth}" Minimum="0" Maximum="80" Increment="5" FormatString="0" Width="130" />
+                        <TextBlock Margin="5,0,0,0" Text="%" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="Darkens the shadows below about 50 nits; black stays black and midtones are untouched. Lower it if dark details disappear." />
+                    </Grid>
+
+                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
+                      <CheckBox Grid.Column="0" IsChecked="{Binding HdrSettings.EnhanceNativeHdr}" Content="Also Enhance Native HDR Videos" />
+                      <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="Off keeps the original grading of videos that are already HDR." />
+                    </Grid>
+
+                    <TextBlock Margin="0,10,0,5" Text="With RTX Video HDR" />
+                    <Border Classes="border" Margin="0,0,0,10">
+                      <StackPanel Margin="10">
+                        <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
+                          <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Highlight Boost" />
+                            <NumericUpDown Value="{Binding HdrSettings.HighlightsRtx}" Minimum="0" Maximum="100" Increment="5" FormatString="0" Width="130" />
+                            <TextBlock Margin="5,0,0,0" Text="%" />
+                          </StackPanel>
+                          <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="Extra brightness for small highlights that stand out from their surroundings (glints, sparks, lights), above half the peak brightness. Large bright areas and skin are left as RTX made them." />
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*">
+                          <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Color Vibrance" />
+                            <NumericUpDown Value="{Binding HdrSettings.VibranceRtx}" Minimum="0" Maximum="80" Increment="5" FormatString="0" Width="130" />
+                            <TextBlock Margin="5,0,0,0" Text="%" />
+                          </StackPanel>
+                          <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="Boosts moderately saturated colors without leaving the display gamut. Adds to the Saturation slider of the NVIDIA App." />
+                        </Grid>
+                      </StackPanel>
+                    </Border>
+
+                    <TextBlock Margin="0,10,0,5" Text="With mpv Conversion" />
+                    <Border Classes="border">
+                      <StackPanel Margin="10">
+                        <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
+                          <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="SDR White Level" />
+                            <NumericUpDown Value="{Binding HdrSettings.SdrWhite}" Minimum="80" Maximum="400" Increment="10" FormatString="0" Width="130" />
+                            <TextBlock Margin="5,0,0,0" Text="nits" />
+                          </StackPanel>
+                          <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="Brightness of SDR white in HDR. 203 is the reference; higher makes the whole picture brighter." />
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
+                          <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Highlight Boost" />
+                            <NumericUpDown Value="{Binding HdrSettings.HighlightsMpv}" Minimum="0" Maximum="100" Increment="5" FormatString="0" Width="130" />
+                            <TextBlock Margin="5,0,0,0" Text="%" />
+                          </StackPanel>
+                          <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="At 100 %, small isolated whites reach the display peak; large white areas rise by 50 % at most to stay comfortable." />
+                        </Grid>
+                        <Grid ColumnDefinitions="Auto,*">
+                          <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Color Vibrance" />
+                            <NumericUpDown Value="{Binding HdrSettings.VibranceMpv}" Minimum="0" Maximum="80" Increment="5" FormatString="0" Width="130" />
+                            <TextBlock Margin="5,0,0,0" Text="%" />
+                          </StackPanel>
+                          <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="Boosts moderately saturated colors without leaving the display gamut. Skin tones and already vivid colors are spared." />
+                        </Grid>
+                      </StackPanel>
+                    </Border>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <TextBlock Margin="0,20,0,0" Classes="help" TextWrapping="Wrap">Displays: the same install can be shared between PCs. The player uses the NVIDIA settings on an NVIDIA GPU and the AMD / Intel settings otherwise.</TextBlock>
+
+              <Grid ColumnDefinitions="*,*" Margin="0,5,0,0">
+                <StackPanel Grid.Column="0" Margin="0,0,5,0" DataContext="{Binding HdrSettings.Nvidia}">
+                  <StackPanel x:DataType="vm:DisplaySettings">
+                  <StackPanel Orientation="Horizontal" Margin="0,10,0,5">
+                    <TextBlock Text="Display on NVIDIA PC" />
+                    <TextBlock Margin="8,0,0,0" Text="(this PC)" Foreground="{DynamicResource SystemAccentColor}" IsVisible="{Binding IsThisPc}" />
+                  </StackPanel>
+                  <Border Classes="border">
+                    <StackPanel Margin="10" Spacing="10">
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Margin="0,0,5,0" Width="120" Text="Windows HDR" />
+                        <ToggleButton IsChecked="{Binding WindowsHdrEnable}" Content="Turn On Automatically" />
+                        <ToggleButton IsChecked="{Binding WindowsHdrFollow}" Content="Follow Windows" />
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Margin="0,0,5,0" Width="120" Text="Peak Brightness" />
+                        <ToggleButton IsChecked="{Binding PeakAutoChoice}" Content="Auto" />
+                        <ToggleButton IsChecked="{Binding PeakManual}" Content="Manual" />
+                        <NumericUpDown Margin="5,0,0,0" Value="{Binding Peak}" Minimum="100" Maximum="10000" Increment="50" FormatString="0" Width="130" IsEnabled="{Binding PeakManual}" />
+                        <TextBlock Margin="5,0,0,0" Text="nits" />
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Margin="0,0,5,0" Width="120" Text="Color Gamut" />
+                        <ToggleButton IsChecked="{Binding GamutAuto}" Content="Auto" />
+                        <ToggleButton IsChecked="{Binding GamutP3}" Content="Display P3" />
+                        <ToggleButton IsChecked="{Binding GamutBt2020}" Content="BT.2020" />
+                      </StackPanel>
+                      <CheckBox IsChecked="{Binding Oled}" Content="OLED Display (perfect blacks)" />
+                    </StackPanel>
+                  </Border>
+                  </StackPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Margin="5,0,0,0" DataContext="{Binding HdrSettings.Amd}">
+                  <StackPanel x:DataType="vm:DisplaySettings">
+                  <StackPanel Orientation="Horizontal" Margin="0,10,0,5">
+                    <TextBlock Text="Display on AMD / Intel PC" />
+                    <TextBlock Margin="8,0,0,0" Text="(this PC)" Foreground="{DynamicResource SystemAccentColor}" IsVisible="{Binding IsThisPc}" />
+                  </StackPanel>
+                  <Border Classes="border">
+                    <StackPanel Margin="10" Spacing="10">
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Margin="0,0,5,0" Width="120" Text="Windows HDR" />
+                        <ToggleButton IsChecked="{Binding WindowsHdrEnable}" Content="Turn On Automatically" />
+                        <ToggleButton IsChecked="{Binding WindowsHdrFollow}" Content="Follow Windows" />
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Margin="0,0,5,0" Width="120" Text="Peak Brightness" />
+                        <ToggleButton IsChecked="{Binding PeakAutoChoice}" Content="Auto" />
+                        <ToggleButton IsChecked="{Binding PeakManual}" Content="Manual" />
+                        <NumericUpDown Margin="5,0,0,0" Value="{Binding Peak}" Minimum="100" Maximum="10000" Increment="50" FormatString="0" Width="130" IsEnabled="{Binding PeakManual}" />
+                        <TextBlock Margin="5,0,0,0" Text="nits" />
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Margin="0,0,5,0" Width="120" Text="Color Gamut" />
+                        <ToggleButton IsChecked="{Binding GamutAuto}" Content="Auto" />
+                        <ToggleButton IsChecked="{Binding GamutP3}" Content="Display P3" />
+                        <ToggleButton IsChecked="{Binding GamutBt2020}" Content="BT.2020" />
+                      </StackPanel>
+                      <CheckBox IsChecked="{Binding Oled}" Content="OLED Display (perfect blacks)" />
+                    </StackPanel>
+                  </Border>
+                  </StackPanel>
+                </StackPanel>
+              </Grid>
+
+              <TextBlock Margin="0,10,0,0" Classes="help" TextWrapping="Wrap" xml:space="preserve"><Bold>Turn On Automatically</Bold>: the player switches Windows HDR on for playback and restores it afterwards. <Bold>Follow Windows</Bold>: HDR is used only when it is already on in Windows. <Bold>Peak Brightness</Bold>: also run the Windows HDR Calibration app with the same value.</TextBlock>
+            </StackPanel>
+
+            <TextBlock Margin="10,0,0,10" Classes="help" TextWrapping="Wrap">Display upscaling and HDR changes take effect after you restart the player.</TextBlock>
 
           </StackPanel>
           <StackPanel Orientation="Horizontal" Grid.Row="0" HorizontalAlignment="Right" VerticalAlignment="Top">
