@@ -1,4 +1,4 @@
-using Avalonia.Collections;
+﻿using Avalonia.Collections;
 using Avalonia.Threading;
 using ReactiveUI;
 using System;
@@ -79,6 +79,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         // GPU identity from the engine's NVML detection; null until a refresh
         // has completed (callers fall back to disk-state-only behavior).
         public bool? GpuNvidia { get; private set; }
+        public string? GpuName { get; private set; }
 
         public bool TrtPackAvailable { get; private set; }
 
@@ -156,6 +157,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
                     ? $"GPU: {gpu.GetProperty("name").GetString()}"
                     : "GPU: no NVIDIA device detected — the built-in DirectML engine covers AMD and Intel GPUs";
                 GpuNvidia = nvidia;
+                GpuName = nvidia ? gpu.GetProperty("name").GetString() : null;
 
                 Packs.Clear();
                 foreach (var e in root.GetProperty("packs").EnumerateArray())

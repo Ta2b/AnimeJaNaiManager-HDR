@@ -26,6 +26,8 @@ namespace AnimeJaNaiConfEditor.ViewModels
             Instance = this;
             AnimeJaNaiConf = ReadAnimeJaNaiConf(AnimeJaNaiConfPath, true);
             HdrSettings = new HdrSettings(HdrConfPath);
+            Engines = new EngineStore(DataDir);
+            Engines.Refresh();
             // Built after the user conf loads so the read-only default profiles reflect the saved
             // standard/sharp preset.
             RefreshDefaultProfiles();
@@ -87,6 +89,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
 
         // ---- display upscaling and HDR (portable_config/script-opts/animejanai_hdr_auto.conf) ----
         public HdrSettings HdrSettings { get; }
+        public EngineStore Engines { get; }
 
         public string[] HdrTargetResolutions { get; } =
             ["auto", "1920x1080", "2560x1440", "3440x1440", "3840x1600", "3840x2160", "5120x2160", "5120x2880", "7680x4320"];
@@ -116,6 +119,8 @@ namespace AnimeJaNaiConfEditor.ViewModels
             RtxHdrSelectable = nvidia != false;
             AmfSelectable = nvidia != true;
             HdrSettings.Nvidia.IsThisPc = nvidia == true;
+            Engines.GpuName = ComponentManager.GpuName;
+            Engines.Refresh();
             HdrSettings.Amd.IsThisPc = nvidia == false;
             bool trtUsable = trtInstalled && nvidia != false;
             TrtSelectable = trtUsable;
