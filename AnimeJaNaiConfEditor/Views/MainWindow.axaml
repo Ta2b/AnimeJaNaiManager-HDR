@@ -315,6 +315,29 @@
 
             <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
               <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Render API</TextBlock>
+                <ToggleButton IsChecked="{Binding HdrSettings.RenderApiD3D11}" Content="Direct3D 11" />
+                <ToggleButton IsChecked="{Binding HdrSettings.RenderApiVulkan}" Content="Vulkan" IsEnabled="{Binding RtxHdrSelectable}" />
+              </StackPanel>
+              <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve">How the player draws the picture on an NVIDIA GPU. <Bold>Direct3D 11</Bold>: RTX Video HDR and RTX Video Super Resolution run as player filters, with the sliders of the NVIDIA App. <Bold>Vulkan</Bold>: they run inside the AnimeJaNai engine and frames never leave GPU memory; needed for NVIDIA Smooth Motion. Requires aji_trt_rtx.dll and aji_rtx.dll in animejanai/inference, otherwise the player converts to HDR itself. Restart the player after changing this. AMD and Intel always use Direct3D 11.</TextBlock>
+            </Grid>
+
+            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10" IsEnabled="{Binding HdrSettings.RenderApiVulkan}">
+              <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="VSR Quality" />
+                <NumericUpDown Value="{Binding HdrSettings.RtxVsrQuality}" Minimum="1" Maximum="4" Increment="1" FormatString="0" Width="100" />
+                <TextBlock Margin="15,0,5,0" VerticalAlignment="Center" Text="Contrast" />
+                <NumericUpDown Value="{Binding HdrSettings.RtxContrast}" Minimum="0" Maximum="200" Increment="10" FormatString="0" Width="110" />
+                <TextBlock Margin="15,0,5,0" VerticalAlignment="Center" Text="Saturation" />
+                <NumericUpDown Value="{Binding HdrSettings.RtxSaturation}" Minimum="0" Maximum="200" Increment="10" FormatString="0" Width="110" />
+                <TextBlock Margin="15,0,5,0" VerticalAlignment="Center" Text="Middle Grey" />
+                <NumericUpDown Value="{Binding HdrSettings.RtxMiddleGray}" Minimum="10" Maximum="100" Increment="5" FormatString="0" Width="110" />
+              </StackPanel>
+              <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve">With Vulkan only. <Bold>VSR Quality</Bold> 1 (fast) to 4 (best, heaviest). <Bold>Contrast</Bold>, <Bold>Saturation</Bold> (100 = neutral) and <Bold>Middle Grey</Bold> are the RTX Video HDR settings; here they replace the NVIDIA App sliders. Applied to the playing video.</TextBlock>
+            </Grid>
+
+            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
+              <StackPanel Grid.Column="0" Orientation="Horizontal">
                 <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Extra Frame Generation</TextBlock>
                 <ToggleButton IsChecked="{Binding HdrSettings.FrameGenerationOff}" Content="Off" />
                 <ToggleButton IsChecked="{Binding HdrSettings.FrameGenerationAmf}" Content="AMD AMF x2" IsEnabled="{Binding AmfSelectable}" />

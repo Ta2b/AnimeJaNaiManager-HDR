@@ -88,6 +88,33 @@ namespace AnimeJaNaiConfEditor.ViewModels
         public bool FrameGenerationOff { get => FrameGeneration == "off"; set { if (value) FrameGeneration = "off"; else this.RaisePropertyChanged(); } }
         public bool FrameGenerationAmf { get => FrameGeneration == "amf"; set { if (value) FrameGeneration = "amf"; else this.RaisePropertyChanged(); } }
 
+        // ---------------------------------------------------------------- render API
+        // "vulkan" (NVIDIA): the player renders with Vulkan and the engine applies RTX Video
+        // (Super Resolution + TrueHDR) itself in CUDA. Required by NVIDIA Smooth Motion.
+        private string _renderApi = "d3d11";
+        public string RenderApi
+        {
+            get => _renderApi;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _renderApi, value);
+                this.RaisePropertyChanged(nameof(RenderApiD3D11));
+                this.RaisePropertyChanged(nameof(RenderApiVulkan));
+            }
+        }
+        public bool RenderApiD3D11 { get => RenderApi == "d3d11"; set { if (value) RenderApi = "d3d11"; else this.RaisePropertyChanged(); } }
+        public bool RenderApiVulkan { get => RenderApi == "vulkan"; set { if (value) RenderApi = "vulkan"; else this.RaisePropertyChanged(); } }
+
+        // RTX Video inside the engine (Vulkan output): these replace the NVIDIA App sliders there.
+        private decimal? _rtxVsrQuality = 2;
+        public decimal? RtxVsrQuality { get => _rtxVsrQuality; set => this.RaiseAndSetIfChanged(ref _rtxVsrQuality, Clamp(value, 1, 4, 2)); }
+        private decimal? _rtxContrast = 100;
+        public decimal? RtxContrast { get => _rtxContrast; set => this.RaiseAndSetIfChanged(ref _rtxContrast, Clamp(value, 0, 200, 100)); }
+        private decimal? _rtxSaturation = 100;
+        public decimal? RtxSaturation { get => _rtxSaturation; set => this.RaiseAndSetIfChanged(ref _rtxSaturation, Clamp(value, 0, 200, 100)); }
+        private decimal? _rtxMiddleGray = 50;
+        public decimal? RtxMiddleGray { get => _rtxMiddleGray; set => this.RaiseAndSetIfChanged(ref _rtxMiddleGray, Clamp(value, 10, 100, 50)); }
+
         // ---------------------------------------------------------------- RIFE and display refresh
         // RIFE factor p/q chosen per video so the output frame rate divides the refresh rate.
         private bool _rifeDisplaySync;
@@ -190,6 +217,11 @@ namespace AnimeJaNaiConfEditor.ViewModels
             };
             TargetResolution = NormalizeResolution(_conf.Get("target_resolution", "auto"));
             FrameGeneration = _conf.Get("frame_generation", "off").ToLowerInvariant() == "amf" ? "amf" : "off";
+            RenderApi = _conf.Get("render_api", "d3d11").ToLowerInvariant() == "vulkan" ? "vulkan" : "d3d11";
+            RtxVsrQuality = Number(_conf.Get("rtx_vsr_quality", "2"));
+            RtxContrast = Number(_conf.Get("rtx_contrast", "100"));
+            RtxSaturation = Number(_conf.Get("rtx_saturation", "100"));
+            RtxMiddleGray = Number(_conf.Get("rtx_middle_gray", "50"));
             RifeDisplaySync = ParseBool(_conf.Get("rife_display_sync", "no"));
             RifeMaxFactor = Number(_conf.Get("rife_max_factor", "2"));
             SubtitleWhite = Number(_conf.Get("subtitle_white", "200"));
@@ -218,6 +250,11 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 _conf.Set("vsr", Upscale);
                 _conf.Set("target_resolution", NormalizeResolution(TargetResolution));
                 _conf.Set("frame_generation", FrameGeneration);
+                _conf.Set("render_api", RenderApi);
+                _conf.Set("rtx_vsr_quality", ((int)(RtxVsrQuality ?? 2)).ToString(INV));
+                _conf.Set("rtx_contrast", ((int)(RtxContrast ?? 100)).ToString(INV));
+                _conf.Set("rtx_saturation", ((int)(RtxSaturation ?? 100)).ToString(INV));
+                _conf.Set("rtx_middle_gray", ((int)(RtxMiddleGray ?? 50)).ToString(INV));
                 _conf.Set("rife_display_sync", RifeDisplaySync ? "yes" : "no");
                 _conf.Set("rife_max_factor", ((int)(RifeMaxFactor ?? 2)).ToString(INV));
                 _conf.Set("subtitle_white", ((int)(SubtitleWhite ?? 200)).ToString(INV));
