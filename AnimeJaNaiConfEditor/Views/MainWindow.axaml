@@ -288,7 +288,7 @@
                 <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Upscale to Display</TextBlock>
                 <ToggleButton IsChecked="{Binding HdrSettings.UpscaleAuto}" Content="Auto" />
                 <ToggleButton IsChecked="{Binding HdrSettings.UpscaleNvidia}" Content="RTX Video Super Resolution" IsEnabled="{Binding RtxHdrSelectable}" />
-                <ToggleButton IsChecked="{Binding HdrSettings.UpscaleAmd}" Content="AMD VideoSR" />
+                <ToggleButton IsChecked="{Binding HdrSettings.UpscaleAmd}" Content="AMD VideoSR" IsEnabled="{Binding AmfSelectable}" />
                 <ToggleButton IsChecked="{Binding HdrSettings.UpscaleClassic}" Content="Standard" />
                 <ToggleButton IsChecked="{Binding HdrSettings.UpscaleOff}" Content="Off" />
               </StackPanel>
