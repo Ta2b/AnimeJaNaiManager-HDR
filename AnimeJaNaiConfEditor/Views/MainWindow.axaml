@@ -302,6 +302,15 @@
               <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve"><Bold>auto</Bold>: the resolution of the screen the player is on. Or a fixed size such as 2560x1440. The aspect ratio is always kept; this does not change the Windows display resolution.</TextBlock>
             </Grid>
 
+            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
+              <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Extra Frame Generation</TextBlock>
+                <ToggleButton IsChecked="{Binding HdrSettings.FrameGenerationOff}" Content="Off" />
+                <ToggleButton IsChecked="{Binding HdrSettings.FrameGenerationAmf}" Content="AMD AMF x2" IsEnabled="{Binding AmfSelectable}" />
+              </StackPanel>
+              <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve">Doubles the frame rate again after AnimeJaNai and RIFE, for any profile. <Bold>AMD AMF x2</Bold>: AMD frame rate conversion inside the player (AMD GPUs, sources up to 60 fps after RIFE). <Bold>NVIDIA Smooth Motion</Bold> is a driver feature: NVIDIA App > Graphics > Program Settings > mpvnet.exe > Smooth Motion. <Bold>AMD Fluid Motion Frames</Bold> is set in AMD Software: Adrenalin Edition. Use only one frame generation at a time.</TextBlock>
+            </Grid>
+
             <Grid ColumnDefinitions="Auto,*" Margin="10,10,0,10">
               <CheckBox Grid.Column="0" IsChecked="{Binding HdrSettings.HdrConversion}" Content="SDR to HDR Conversion" />
               <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" TextWrapping="Wrap" xml:space="preserve"><Bold>On</Bold>: SDR videos are converted to HDR on HDR displays, with the look set below. Native HDR videos always play in HDR.

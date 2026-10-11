@@ -70,6 +70,23 @@ namespace AnimeJaNaiConfEditor.ViewModels
             set => this.RaiseAndSetIfChanged(ref _targetResolution, value ?? "");
         }
 
+        // ---------------------------------------------------------------- extra frame generation
+        // "amf": AMD AMF frame rate conversion x2 inside the player, after AnimeJaNai/RIFE (AMD only).
+        // NVIDIA Smooth Motion / AMD Fluid Motion Frames are driver features, set outside the player.
+        private string _frameGeneration = "off";
+        public string FrameGeneration
+        {
+            get => _frameGeneration;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _frameGeneration, value);
+                this.RaisePropertyChanged(nameof(FrameGenerationOff));
+                this.RaisePropertyChanged(nameof(FrameGenerationAmf));
+            }
+        }
+        public bool FrameGenerationOff { get => FrameGeneration == "off"; set { if (value) FrameGeneration = "off"; else this.RaisePropertyChanged(); } }
+        public bool FrameGenerationAmf { get => FrameGeneration == "amf"; set { if (value) FrameGeneration = "amf"; else this.RaisePropertyChanged(); } }
+
         // ---------------------------------------------------------------- SDR to HDR
         private bool _hdrConversion = true;
         public bool HdrConversion
@@ -147,6 +164,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 _ => "auto",
             };
             TargetResolution = NormalizeResolution(_conf.Get("target_resolution", "auto"));
+            FrameGeneration = _conf.Get("frame_generation", "off").ToLowerInvariant() == "amf" ? "amf" : "off";
             HdrConversion = ParseBool(_conf.Get("hdr_conversion", "yes"));
             var backend = _conf.Get("hdr_backend", "auto").ToLowerInvariant();
             Backend = backend is "rtx" or "mpv" ? backend : "auto";
@@ -171,6 +189,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             {
                 _conf.Set("vsr", Upscale);
                 _conf.Set("target_resolution", NormalizeResolution(TargetResolution));
+                _conf.Set("frame_generation", FrameGeneration);
                 _conf.Set("hdr_conversion", HdrConversion ? "yes" : "no");
                 _conf.Set("hdr_backend", Backend);
                 _conf.Set("grade", Enhance ? "yes" : "no");

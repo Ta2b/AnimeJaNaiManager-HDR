@@ -101,11 +101,20 @@ namespace AnimeJaNaiConfEditor.ViewModels
             set => this.RaiseAndSetIfChanged(ref _rtxHdrSelectable, value);
         }
 
+        // AMD AMF frame generation runs in the player on AMD only; unknown keeps it selectable.
+        private bool _amfSelectable = true;
+        public bool AmfSelectable
+        {
+            get => _amfSelectable;
+            set => this.RaiseAndSetIfChanged(ref _amfSelectable, value);
+        }
+
         public void RefreshComponentAwareness()
         {
             bool trtInstalled = TrtOnDisk();
             bool? nvidia = ComponentManager.GpuNvidia;
             RtxHdrSelectable = nvidia != false;
+            AmfSelectable = nvidia != true;
             HdrSettings.Nvidia.IsThisPc = nvidia == true;
             HdrSettings.Amd.IsThisPc = nvidia == false;
             bool trtUsable = trtInstalled && nvidia != false;
