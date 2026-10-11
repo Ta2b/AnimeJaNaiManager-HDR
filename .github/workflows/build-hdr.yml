@@ -41,3 +41,17 @@ jobs:
         prerelease: true
         artifacts: AnimeJaNaiManager-HDR-x64.zip,staging/AnimeJaNaiManager-HDR.exe
         token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Update the rolling release of this branch
+      uses: ncipollo/release-action@v1
+      with:
+        tag: latest-${{ github.ref_name }}
+        name: AnimeJaNai Manager (HDR) - latest ${{ github.ref_name }}
+        commit: ${{ github.sha }}
+        body: Latest build of branch ${{ github.ref_name }} (${{ github.sha }}). Used by the mpv-AnimeJaNai-HDR package builder.
+        draft: false
+        prerelease: true
+        allowUpdates: true
+        removeArtifacts: true
+        artifacts: AnimeJaNaiManager-HDR-x64.zip,staging/AnimeJaNaiManager-HDR.exe
+        token: ${{ secrets.GITHUB_TOKEN }}
