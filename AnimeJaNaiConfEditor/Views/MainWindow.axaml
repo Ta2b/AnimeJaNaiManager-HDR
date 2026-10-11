@@ -266,6 +266,15 @@
                   </Grid>
 
                   <TextBox Text="{Binding AnimeJaNaiConf.TrtEngineSettings}" HorizontalAlignment="Stretch" TextWrapping="Wrap" AcceptsReturn="False" MinHeight="70" VerticalContentAlignment="Top" />
+
+                  <Grid ColumnDefinitions="Auto,*" Margin="0,10,0,0">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="5">
+                      <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Built Engines" />
+                      <Button Content="Delete Outdated" Command="{Binding Engines.DeleteOutdated}" IsEnabled="{Binding Engines.HasOutdated}" />
+                      <Button Content="{Binding Engines.DeleteAllText}" Command="{Binding Engines.DeleteAll}" IsEnabled="{Binding Engines.HasEngines}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" TextWrapping="Wrap" Text="{Binding Engines.Summary, StringFormat='{}{0}. Outdated = built for another TensorRT version or GPU; they can never load again. Any deleted engine is rebuilt on the next play that needs it.'}" />
+                  </Grid>
                 </StackPanel>
               </Border>
             </StackPanel>
@@ -313,6 +322,15 @@
               <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve">Doubles the frame rate again after AnimeJaNai and RIFE, for any profile. <Bold>AMD AMF x2</Bold>: AMD frame rate conversion inside the player (AMD GPUs, sources up to 60 fps after RIFE). <Bold>NVIDIA Smooth Motion</Bold> is a driver feature: NVIDIA App > Graphics > Program Settings > mpvnet.exe > Smooth Motion. <Bold>AMD Fluid Motion Frames</Bold> is set in AMD Software: Adrenalin Edition. Use only one frame generation at a time.</TextBlock>
             </Grid>
 
+            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
+              <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <CheckBox IsChecked="{Binding HdrSettings.RifeDisplaySync}" Content="Match RIFE to Display Refresh" />
+                <TextBlock Margin="15,0,5,0" VerticalAlignment="Center" Text="Max Factor" />
+                <NumericUpDown Value="{Binding HdrSettings.RifeMaxFactor}" Minimum="1" Maximum="8" Increment="1" FormatString="0" Width="110" IsEnabled="{Binding HdrSettings.RifeDisplaySync}" />
+              </StackPanel>
+              <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve">For each video, picks the RIFE factor (such as 2, 5/2 or 5/3) that makes every frame stay on screen for the same number of refreshes: no judder. Applies to profiles with RIFE enabled, from the next video. <Bold>Max Factor</Bold> limits the GPU load: with "Interpolate before upscaling", the model also runs on every interpolated frame. Off while Automatic Display Refresh Rate is on (it picks the refresh instead).</TextBlock>
+            </Grid>
+
             <Grid ColumnDefinitions="Auto,*" Margin="10,10,0,10">
               <CheckBox Grid.Column="0" IsChecked="{Binding HdrSettings.HdrConversion}" Content="SDR to HDR Conversion" />
               <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" TextWrapping="Wrap" xml:space="preserve"><Bold>On</Bold>: SDR videos are converted to HDR on HDR displays, with the look set below. Native HDR videos always play in HDR.
@@ -331,6 +349,15 @@
                 <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve"><Bold>Auto</Bold>: RTX Video HDR on NVIDIA, mpv on AMD and Intel. <Bold>RTX Video HDR</Bold>: NVIDIA's AI conversion; its own brightness, contrast and saturation are set in the NVIDIA App. <Bold>mpv</Bold>: works on every GPU; SDR white is placed at the SDR White Level and the enhancement creates the highlights.</TextBlock>
               </Grid>
 
+              <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="0,0,0,10">
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                  <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Subtitle Brightness" />
+                  <NumericUpDown Value="{Binding HdrSettings.SubtitleWhite}" Minimum="80" Maximum="1000" Increment="10" FormatString="0" Width="130" />
+                  <TextBlock Margin="5,0,0,0" Text="nits" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" Text="White of the subtitles in HDR. 200 is comfortable on an OLED; higher is brighter but can dazzle in dark scenes." />
+              </Grid>
+
               <TextBlock Margin="0,10,0,5" Text="HDR Enhancement" />
               <Border Classes="border">
                 <StackPanel Margin="10">
@@ -340,6 +367,16 @@
                   </Grid>
 
                   <StackPanel IsEnabled="{Binding HdrSettings.EnhancementControlsEnabled}">
+                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
+                      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="5">
+                        <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Look Preset" />
+                        <Button Content="Natural" Command="{Binding HdrSettings.PresetNatural}" />
+                        <Button Content="Vivid" Command="{Binding HdrSettings.PresetVivid}" />
+                        <Button Content="Maximum" Command="{Binding HdrSettings.PresetMaximum}" />
+                      </StackPanel>
+                      <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="Fills the values below; adjust them afterwards if you like. In the player, Ctrl+G cycles your values, a natural look, and off." />
+                    </Grid>
+
                     <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
                       <StackPanel Grid.Column="0" Orientation="Horizontal">
                         <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Black Depth" />
@@ -480,7 +517,7 @@
               <TextBlock Margin="0,10,0,0" Classes="help" TextWrapping="Wrap" xml:space="preserve"><Bold>Turn On Automatically</Bold>: the player switches Windows HDR on for playback and restores it afterwards. <Bold>Follow Windows</Bold>: HDR is used only when it is already on in Windows. <Bold>Peak Brightness</Bold>: also run the Windows HDR Calibration app with the same value.</TextBlock>
             </StackPanel>
 
-            <TextBlock Margin="10,0,0,10" Classes="help" TextWrapping="Wrap">Display upscaling and HDR changes take effect after you restart the player.</TextBlock>
+            <TextBlock Margin="10,0,0,10" Classes="help" TextWrapping="Wrap">Display upscaling, HDR and frame generation changes apply to the running player at once; the RIFE factor from the next video. Ctrl+Alt+P in the player shows a calibration pattern for the peak, black and paper white values.</TextBlock>
 
           </StackPanel>
           <StackPanel Orientation="Horizontal" Grid.Row="0" HorizontalAlignment="Right" VerticalAlignment="Top">

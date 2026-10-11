@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.IO.Pipes;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
@@ -87,6 +88,14 @@ namespace AnimeJaNaiConfEditor.ViewModels
         public bool FrameGenerationOff { get => FrameGeneration == "off"; set { if (value) FrameGeneration = "off"; else this.RaisePropertyChanged(); } }
         public bool FrameGenerationAmf { get => FrameGeneration == "amf"; set { if (value) FrameGeneration = "amf"; else this.RaisePropertyChanged(); } }
 
+        // ---------------------------------------------------------------- RIFE and display refresh
+        // RIFE factor p/q chosen per video so the output frame rate divides the refresh rate.
+        private bool _rifeDisplaySync;
+        public bool RifeDisplaySync { get => _rifeDisplaySync; set => this.RaiseAndSetIfChanged(ref _rifeDisplaySync, value); }
+
+        private decimal? _rifeMaxFactor = 2;
+        public decimal? RifeMaxFactor { get => _rifeMaxFactor; set => this.RaiseAndSetIfChanged(ref _rifeMaxFactor, Clamp(value, 1, 8, 2)); }
+
         // ---------------------------------------------------------------- SDR to HDR
         private bool _hdrConversion = true;
         public bool HdrConversion
@@ -146,6 +155,22 @@ namespace AnimeJaNaiConfEditor.ViewModels
         private decimal? _vibranceRtx = 20;
         public decimal? VibranceRtx { get => _vibranceRtx; set => this.RaiseAndSetIfChanged(ref _vibranceRtx, Clamp(value, 0, 80, 20)); }
 
+        private decimal? _subtitleWhite = 200;
+        public decimal? SubtitleWhite { get => _subtitleWhite; set => this.RaiseAndSetIfChanged(ref _subtitleWhite, Clamp(value, 80, 1000, 200)); }
+
+        // Look presets: fill the enhancement values in one click (still editable afterwards).
+        public void PresetNatural() => ApplyPreset(15, 50, 25, 15, 10);
+        public void PresetVivid() => ApplyPreset(30, 85, 50, 30, 20);
+        public void PresetMaximum() => ApplyPreset(80, 100, 100, 80, 80);
+        private void ApplyPreset(decimal black, decimal hlMpv, decimal hlRtx, decimal vibMpv, decimal vibRtx)
+        {
+            BlackDepth = black;
+            HighlightsMpv = hlMpv;
+            HighlightsRtx = hlRtx;
+            VibranceMpv = vibMpv;
+            VibranceRtx = vibRtx;
+        }
+
         private bool _enhanceNativeHdr;
         public bool EnhanceNativeHdr { get => _enhanceNativeHdr; set => this.RaiseAndSetIfChanged(ref _enhanceNativeHdr, value); }
 
@@ -165,6 +190,9 @@ namespace AnimeJaNaiConfEditor.ViewModels
             };
             TargetResolution = NormalizeResolution(_conf.Get("target_resolution", "auto"));
             FrameGeneration = _conf.Get("frame_generation", "off").ToLowerInvariant() == "amf" ? "amf" : "off";
+            RifeDisplaySync = ParseBool(_conf.Get("rife_display_sync", "no"));
+            RifeMaxFactor = Number(_conf.Get("rife_max_factor", "2"));
+            SubtitleWhite = Number(_conf.Get("subtitle_white", "200"));
             HdrConversion = ParseBool(_conf.Get("hdr_conversion", "yes"));
             var backend = _conf.Get("hdr_backend", "auto").ToLowerInvariant();
             Backend = backend is "rtx" or "mpv" ? backend : "auto";
@@ -190,6 +218,9 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 _conf.Set("vsr", Upscale);
                 _conf.Set("target_resolution", NormalizeResolution(TargetResolution));
                 _conf.Set("frame_generation", FrameGeneration);
+                _conf.Set("rife_display_sync", RifeDisplaySync ? "yes" : "no");
+                _conf.Set("rife_max_factor", ((int)(RifeMaxFactor ?? 2)).ToString(INV));
+                _conf.Set("subtitle_white", ((int)(SubtitleWhite ?? 200)).ToString(INV));
                 _conf.Set("hdr_conversion", HdrConversion ? "yes" : "no");
                 _conf.Set("hdr_backend", Backend);
                 _conf.Set("grade", Enhance ? "yes" : "no");
@@ -204,12 +235,31 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 Amd.Write(_conf);
                 try
                 {
-                    _conf.Save(_path);
+                    if (_conf.Save(_path)) NotifyPlayer();
                 }
                 catch (Exception e)
                 {
                     System.Diagnostics.Debug.WriteLine($"HDR settings not saved: {e.Message}");
                 }
+            }
+        }
+
+        // Live apply: mpv.conf sets input-ipc-server=mpvpipe. If the player is running, every
+        // script re-reads the file (user-scripts react to animejanai-reload-options).
+        // Settings that only matter when a video starts (RIFE factor) apply from the next file.
+        private static void NotifyPlayer()
+        {
+            try
+            {
+                using var pipe = new NamedPipeClientStream(".", "mpvpipe", PipeDirection.Out);
+                pipe.Connect(200);
+                var line = Encoding.UTF8.GetBytes("{\"command\":[\"script-message\",\"animejanai-reload-options\"]}\n");
+                pipe.Write(line, 0, line.Length);
+                pipe.Flush();
+            }
+            catch (Exception)
+            {
+                // Player not running (or another pipe name): the file is read at the next start.
             }
         }
 
@@ -381,14 +431,16 @@ namespace AnimeJaNaiConfEditor.ViewModels
             else _lines[i] = line;
         }
 
-        public void Save(string path)
+        // Returns true when the file content changed.
+        public bool Save(string path)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var text = string.Join(_newline, _lines) + _newline;
-            if (File.Exists(path) && File.ReadAllText(path, Encoding.UTF8) == text) return;
+            if (File.Exists(path) && File.ReadAllText(path, Encoding.UTF8) == text) return false;
             var tmp = path + ".tmp";
             File.WriteAllText(tmp, text, new UTF8Encoding(false));
             File.Move(tmp, path, true);
+            return true;
         }
     }
 }
