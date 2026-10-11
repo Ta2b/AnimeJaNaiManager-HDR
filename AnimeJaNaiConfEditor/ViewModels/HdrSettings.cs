@@ -112,6 +112,9 @@ namespace AnimeJaNaiConfEditor.ViewModels
         public decimal? RtxContrast { get => _rtxContrast; set => this.RaiseAndSetIfChanged(ref _rtxContrast, Clamp(value, 0, 200, 100)); }
         private decimal? _rtxSaturation = 100;
         public decimal? RtxSaturation { get => _rtxSaturation; set => this.RaiseAndSetIfChanged(ref _rtxSaturation, Clamp(value, 0, 200, 100)); }
+        // Vulkan engine: a frame identical to the last processed one reuses its result.
+        private bool _skipHeldFrames = true;
+        public bool SkipHeldFrames { get => _skipHeldFrames; set => this.RaiseAndSetIfChanged(ref _skipHeldFrames, value); }
         private decimal? _rtxMiddleGray = 50;
         public decimal? RtxMiddleGray { get => _rtxMiddleGray; set => this.RaiseAndSetIfChanged(ref _rtxMiddleGray, Clamp(value, 10, 100, 50)); }
 
@@ -222,6 +225,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             RtxContrast = Number(_conf.Get("rtx_contrast", "100"));
             RtxSaturation = Number(_conf.Get("rtx_saturation", "100"));
             RtxMiddleGray = Number(_conf.Get("rtx_middle_gray", "50"));
+            SkipHeldFrames = ParseBool(_conf.Get("skip_held_frames", "yes"));
             RifeDisplaySync = ParseBool(_conf.Get("rife_display_sync", "no"));
             RifeMaxFactor = Number(_conf.Get("rife_max_factor", "2"));
             SubtitleWhite = Number(_conf.Get("subtitle_white", "200"));
@@ -255,6 +259,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 _conf.Set("rtx_contrast", ((int)(RtxContrast ?? 100)).ToString(INV));
                 _conf.Set("rtx_saturation", ((int)(RtxSaturation ?? 100)).ToString(INV));
                 _conf.Set("rtx_middle_gray", ((int)(RtxMiddleGray ?? 50)).ToString(INV));
+                _conf.Set("skip_held_frames", SkipHeldFrames ? "yes" : "no");
                 _conf.Set("rife_display_sync", RifeDisplaySync ? "yes" : "no");
                 _conf.Set("rife_max_factor", ((int)(RifeMaxFactor ?? 2)).ToString(INV));
                 _conf.Set("subtitle_white", ((int)(SubtitleWhite ?? 200)).ToString(INV));
