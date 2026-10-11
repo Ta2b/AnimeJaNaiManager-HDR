@@ -315,6 +315,17 @@
 
             <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
               <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <CheckBox IsChecked="{Binding HdrSettings.MpvTrueHdrLook}" Content="TrueHDR Look for mpv Conversion" />
+                <TextBlock Margin="15,0,5,0" VerticalAlignment="Center" Text="Contrast" />
+                <NumericUpDown Value="{Binding HdrSettings.MpvContrast}" Minimum="100" Maximum="200" Increment="10" FormatString="0" Width="110" IsEnabled="{Binding HdrSettings.MpvTrueHdrLook}" />
+                <TextBlock Margin="15,0,5,0" VerticalAlignment="Center" Text="Saturation" />
+                <NumericUpDown Value="{Binding HdrSettings.MpvSaturation}" Minimum="100" Maximum="200" Increment="10" FormatString="0" Width="110" IsEnabled="{Binding HdrSettings.MpvTrueHdrLook}" />
+              </StackPanel>
+              <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve">When mpv converts SDR to HDR (AMD and Intel GPUs, the mpv backend, or no active AnimeJaNai chain), gives it the look of RTX Video HDR: SDR white reaches the display peak, midtones stay near 50 nits, then the same grade as on TrueHDR. The curve was measured on RTX TrueHDR. <Bold>Contrast</Bold> and <Bold>Saturation</Bold> use the NVIDIA App scale: 100 neutral, 200 maximum. Off: the original mpv conversion (SDR White Level, highlights by area). Applied to the playing video.</TextBlock>
+            </Grid>
+
+            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
+              <StackPanel Grid.Column="0" Orientation="Horizontal">
                 <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Render API</TextBlock>
                 <ToggleButton IsChecked="{Binding HdrSettings.RenderApiD3D11}" Content="Direct3D 11" />
                 <ToggleButton IsChecked="{Binding HdrSettings.RenderApiVulkan}" Content="Vulkan" IsEnabled="{Binding RtxHdrSelectable}" />

@@ -112,6 +112,14 @@ namespace AnimeJaNaiConfEditor.ViewModels
         public decimal? RtxContrast { get => _rtxContrast; set => this.RaiseAndSetIfChanged(ref _rtxContrast, Clamp(value, 0, 200, 100)); }
         private decimal? _rtxSaturation = 100;
         public decimal? RtxSaturation { get => _rtxSaturation; set => this.RaiseAndSetIfChanged(ref _rtxSaturation, Clamp(value, 0, 200, 100)); }
+        // mpv conversion with the look of RTX TrueHDR (tone curve measured on the RTX Video SDK).
+        private bool _mpvTrueHdrLook;
+        public bool MpvTrueHdrLook { get => _mpvTrueHdrLook; set => this.RaiseAndSetIfChanged(ref _mpvTrueHdrLook, value); }
+        private decimal? _mpvContrast = 100;
+        public decimal? MpvContrast { get => _mpvContrast; set => this.RaiseAndSetIfChanged(ref _mpvContrast, Clamp(value, 100, 200, 100)); }
+        private decimal? _mpvSaturation = 100;
+        public decimal? MpvSaturation { get => _mpvSaturation; set => this.RaiseAndSetIfChanged(ref _mpvSaturation, Clamp(value, 100, 200, 100)); }
+
         // Vulkan engine: a frame identical to the last processed one reuses its result.
         private bool _skipHeldFrames = true;
         public bool SkipHeldFrames { get => _skipHeldFrames; set => this.RaiseAndSetIfChanged(ref _skipHeldFrames, value); }
@@ -226,6 +234,9 @@ namespace AnimeJaNaiConfEditor.ViewModels
             RtxSaturation = Number(_conf.Get("rtx_saturation", "100"));
             RtxMiddleGray = Number(_conf.Get("rtx_middle_gray", "50"));
             SkipHeldFrames = ParseBool(_conf.Get("skip_held_frames", "yes"));
+            MpvTrueHdrLook = ParseBool(_conf.Get("mpv_truehdr_look", "no"));
+            MpvContrast = Number(_conf.Get("mpv_contrast", "100"));
+            MpvSaturation = Number(_conf.Get("mpv_saturation", "100"));
             RifeDisplaySync = ParseBool(_conf.Get("rife_display_sync", "no"));
             RifeMaxFactor = Number(_conf.Get("rife_max_factor", "2"));
             SubtitleWhite = Number(_conf.Get("subtitle_white", "200"));
@@ -260,6 +271,9 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 _conf.Set("rtx_saturation", ((int)(RtxSaturation ?? 100)).ToString(INV));
                 _conf.Set("rtx_middle_gray", ((int)(RtxMiddleGray ?? 50)).ToString(INV));
                 _conf.Set("skip_held_frames", SkipHeldFrames ? "yes" : "no");
+                _conf.Set("mpv_truehdr_look", MpvTrueHdrLook ? "yes" : "no");
+                _conf.Set("mpv_contrast", ((int)(MpvContrast ?? 100)).ToString(INV));
+                _conf.Set("mpv_saturation", ((int)(MpvSaturation ?? 100)).ToString(INV));
                 _conf.Set("rife_display_sync", RifeDisplaySync ? "yes" : "no");
                 _conf.Set("rife_max_factor", ((int)(RifeMaxFactor ?? 2)).ToString(INV));
                 _conf.Set("subtitle_white", ((int)(SubtitleWhite ?? 200)).ToString(INV));
