@@ -1,57 +1,120 @@
 name: Build AnimeJaNai Manager (HDR)
-
-# Builds the HDR-settings variant of the Manager on every push to hdr-settings and
-# publishes it as a release, so the exe can be downloaded without authentication.
 on:
   push:
-    branches: [hdr-settings, hdr-settings-0.8]
+    branches: [hdr-settings-0.8]
+  pull_request:
+    branches: [hdr-settings-0.8]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manager-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
-    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-24.04
+            rid: linux-x64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: manager
+      - name: Resolve shared player source
+        shell: bash
+        run: echo "PLAYER_REF=$(cat manager/player-source-ref.txt)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        with:
+          repository: Ta2b/mpv-AnimeJaNai-HDR
+          ref: ${{ env.PLAYER_REF }}
+          path: mpv-AnimeJaNai-HDR
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+      - name: Profile and HDR persistence regressions
+        run: dotnet run --project manager/tests/ProfileRoundTrip/ProfileRoundTrip.csproj
+      - name: Settings UI and rendering regressions
+        run: dotnet run --project manager/tests/SettingsUi -p:RuntimeIdentifier=${{ matrix.rid }} -- artifacts/settings.png
+      - name: Publish self-contained Manager
+        run: dotnet publish manager/AnimeJaNaiConfEditor/AnimeJaNaiConfEditor.csproj -c Release -r ${{ matrix.rid }} --self-contained true -o publish
+      - name: Stage Windows (keep existing asset names)
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory staging
+          Copy-Item publish/AnimeJaNaiManager.exe staging/AnimeJaNaiManager-HDR.exe
+          Copy-Item publish/*.dll staging/
+          Compress-Archive -Path staging/* -DestinationPath AnimeJaNaiManager-HDR-x64.zip
+          Copy-Item staging/AnimeJaNaiManager-HDR.exe AnimeJaNaiManager-HDR.exe
+      - name: Stage Linux with native Avalonia libraries
+        if: matrix.rid == 'linux-x64'
+        run: |
+          mkdir staging
+          cp publish/AnimeJaNaiManager staging/AnimeJaNaiManager-HDR
+          cp publish/*.so staging/
+          tar --zstd -C staging -cf AnimeJaNaiManager-HDR-linux-x64.tar.zst .
+      - name: Upload settings screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: settings-${{ matrix.rid }}
+          path: artifacts/*.png
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manager-${{ matrix.rid }}
+          retention-days: 14
+          path: |
+            AnimeJaNaiManager-HDR.exe
+            AnimeJaNaiManager-HDR-x64.zip
+            AnimeJaNaiManager-HDR-linux-x64.tar.zst
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/hdr-settings-0.8'
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-    - uses: actions/checkout@v4
-
-    - uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '10.x'  # Must match <TargetFramework> in AnimeJaNaiConfEditor.csproj
-
-    - name: Publish self-contained single-file win-x64
-      run: dotnet publish AnimeJaNaiConfEditor/AnimeJaNaiConfEditor.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
-
-    - name: Stage
-      shell: pwsh
-      run: |
-        New-Item -ItemType Directory -Path staging | Out-Null
-        Copy-Item publish\AnimeJaNaiManager.exe staging\AnimeJaNaiManager-HDR.exe
-        Copy-Item publish\*.dll staging\
-        Compress-Archive -Path staging\* -DestinationPath AnimeJaNaiManager-HDR-x64.zip -Force
-
-    - name: Publish release
-      uses: ncipollo/release-action@v1
-      with:
-        tag: hdr-build-${{ github.run_number }}
-        name: AnimeJaNai Manager (HDR) build ${{ github.run_number }} (${{ github.ref_name }})
-        commit: ${{ github.sha }}
-        body: Built from ${{ github.sha }} on branch ${{ github.ref_name }}.
-        draft: false
-        prerelease: true
-        artifacts: AnimeJaNaiManager-HDR-x64.zip,staging/AnimeJaNaiManager-HDR.exe
-        token: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Update the rolling release of this branch
-      uses: ncipollo/release-action@v1
-      with:
-        tag: latest-${{ github.ref_name }}
-        name: AnimeJaNai Manager (HDR) - latest ${{ github.ref_name }}
-        commit: ${{ github.sha }}
-        body: Latest build of branch ${{ github.ref_name }} (${{ github.sha }}). Used by the mpv-AnimeJaNai-HDR package builder.
-        draft: false
-        prerelease: true
-        allowUpdates: true
-        removeArtifacts: true
-        artifacts: AnimeJaNaiManager-HDR-x64.zip,staging/AnimeJaNaiManager-HDR.exe
-        token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: manager-*
+          merge-multiple: true
+          path: assets
+      # A single writer publishes both platforms together; rolling updates cannot
+      # remove the other platform's files between two concurrent build jobs.
+      - uses: ncipollo/release-action@v1
+        with:
+          tag: hdr-${{ github.sha }}
+          name: AnimeJaNai Manager (HDR) - ${{ github.sha }}
+          commit: ${{ github.sha }}
+          prerelease: true
+          makeLatest: false
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          artifacts: assets/*
+      - uses: ncipollo/release-action@v1
+        with:
+          tag: latest-${{ github.ref_name }}
+          name: AnimeJaNai Manager (HDR) - latest ${{ github.ref_name }}
+          commit: ${{ github.sha }}
+          prerelease: true
+          allowUpdates: true
+          # Replace same-named assets; keep any other platform or legacy assets.
+          removeArtifacts: false
+          artifactErrorsFailBuild: true
+          makeLatest: false
+          artifacts: assets/*

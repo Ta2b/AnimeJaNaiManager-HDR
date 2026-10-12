@@ -1,8 +1,21 @@
 # AnimeJaNai Manager
 
+Linux HDR port: [LINUX.md](LINUX.md) describes Vulkan/TensorRT selection,
+SDR/PQ output, Unix IPC and profile preservation. Windows keeps its existing
+TensorRT/DirectML backends.
+
 Manager for [mpv-upscale-2x_animejanai](https://github.com/the-database/mpv-upscale-2x_animejanai): edit upscaling profiles and chains, and install or remove hardware-specific components (TensorRT runtime, per-GPU kernel packs, RIFE interpolation models) with recommendations based on the detected GPU.
 
 Formerly AnimeJaNaiConfEditor; the executable is `AnimeJaNaiManager.exe` and ships at the install root next to `mpvnet.exe`.
+
+## Global Settings
+
+The page has one Display section for every GPU. New installs use automatic
+peak brightness and gamut, with OLED off unless explicitly confirmed. The
+player follows system HDR; SDR conversion and Natural grading are enabled
+when HDR output is negotiated. Advanced controls are collapsed. Existing
+settings and legacy display descriptions are preserved during migration.
+Windows Vulkan inference is deferred; this UI change keeps the existing engines.
 
 ## Experimental automatic display refresh
 
@@ -27,3 +40,12 @@ support and the updated `animejanai_backend.lua`. It is saved as
 in full config exports. It does not change the video frame rate or enable RIFE.
 
 ![297521638-76a8db5b-8c67-4b0c-911a-9b02598fb37a](https://github.com/the-database/AnimeJaNaiConfEditor/assets/25811902/e3b5d268-794c-40d3-b0ae-2d781d98d6ae)
+
+## Builds and releases
+
+The HDR workflow checks and builds Windows/Linux independently, then publishes
+both runtime packages together. `hdr-<commit SHA>` identifies the exact source;
+`latest-hdr-settings-0.8` remains available for existing installations. PRs run
+checks without publication. `player-source-ref.txt` pins the shared player code.
+The previous upstream release workflow is retired. See the companion player's
+[release guide](https://github.com/Ta2b/mpv-AnimeJaNai-HDR/blob/hdr-3.8/docs/RELEASE.md).

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
@@ -13,6 +13,7 @@
     <ApplicationIcon>Assets\logo.ico</ApplicationIcon>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
@@ -50,4 +51,17 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+  <PropertyGroup>
+    <PlatformSource Condition="'$(PlatformSource)' == ''">../../mpv-AnimeJaNai-HDR/AnimeJaNaiPlatform/PlatformServices.cs</PlatformSource>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(PlatformSource)" Link="PlatformServices.cs" />
+  </ItemGroup>
+  <!-- Keep native graphics libraries even when incremental single-file publishing
+       skips GenerateBundle and loses its excluded-native-file list. -->
+  <Target Name="CopyLinuxNativeLibraries" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
+    <Copy SourceFiles="@(NativeCopyLocalItems)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+    <Error Condition="!Exists('$(PublishDir)/libSkiaSharp.so') Or !Exists('$(PublishDir)/libHarfBuzzSharp.so')"
+           Text="Linux publication requires native SkiaSharp and HarfBuzz libraries." />
+  </Target>
 </Project>

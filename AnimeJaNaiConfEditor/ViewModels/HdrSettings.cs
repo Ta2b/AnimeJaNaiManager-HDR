@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.IO.Pipes;
+using System.Net.Sockets;
+using System.Threading;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
@@ -24,21 +26,45 @@ namespace AnimeJaNaiConfEditor.ViewModels
         private readonly string _path;
         private readonly ConfLines _conf;
         private bool _loading;
+        private bool _displayEdited;
 
-        public HdrSettings(string path)
+        public HdrSettings(string path, string? legacyVendor = null)
         {
             _path = path;
             _conf = ConfLines.Load(path);
             _loading = true;
-            ReadValues();
+            ReadValues(legacyVendor);
             _loading = false;
 
             // Coalesce bursts (NumericUpDown spinning, toggle groups) into one write.
             Changed.Where(_ => !_loading)
                    .Throttle(TimeSpan.FromMilliseconds(300))
                    .Subscribe(_ => Save());
+            Display.Changed.Where(_ => !_loading).Do(_ => _displayEdited = true)
+                   .Throttle(TimeSpan.FromMilliseconds(300)).Subscribe(_ => Save());
         }
 
+        public bool IsLinux => OperatingSystem.IsLinux();
+        public bool WindowsFeatures => OperatingSystem.IsWindows();
+        private string _linuxOutput = "auto";
+        public string LinuxOutput
+        {
+            get => _linuxOutput;
+            set { this.RaiseAndSetIfChanged(ref _linuxOutput, value is "pq" or "sdr" ? value : "auto");
+                this.RaisePropertyChanged(nameof(LinuxAuto));
+                this.RaisePropertyChanged(nameof(LinuxSdr)); this.RaisePropertyChanged(nameof(LinuxPq)); }
+        }
+        public bool LinuxAuto { get => LinuxOutput == "auto"; set { if (value) LinuxOutput = "auto"; } }
+        public bool LinuxSdr { get => LinuxOutput == "sdr"; set { if (value) LinuxOutput = "sdr"; } }
+        public bool LinuxPq { get => LinuxOutput == "pq"; set { if (value) LinuxOutput = "pq"; } }
+
+        private string _saveNotice = "";
+        public string SaveNotice
+        {
+            get => _saveNotice;
+            private set { this.RaiseAndSetIfChanged(ref _saveNotice, value); this.RaisePropertyChanged(nameof(HasSaveNotice)); }
+        }
+        public bool HasSaveNotice => !string.IsNullOrEmpty(SaveNotice);
         public bool ConfFound => File.Exists(_path);
         public string ConfPath => _path;
 
@@ -175,23 +201,23 @@ namespace AnimeJaNaiConfEditor.ViewModels
         }
         public bool EnhancementControlsEnabled => HdrConversion && Enhance;
 
-        private decimal? _blackDepth = 30;
-        public decimal? BlackDepth { get => _blackDepth; set => this.RaiseAndSetIfChanged(ref _blackDepth, Clamp(value, 0, 80, 30)); }
+        private decimal? _blackDepth = 15;
+        public decimal? BlackDepth { get => _blackDepth; set => this.RaiseAndSetIfChanged(ref _blackDepth, Clamp(value, 0, 80, 15)); }
 
         private decimal? _sdrWhite = 203;
         public decimal? SdrWhite { get => _sdrWhite; set => this.RaiseAndSetIfChanged(ref _sdrWhite, Clamp(value, 80, 400, 203)); }
 
-        private decimal? _highlightsMpv = 85;
-        public decimal? HighlightsMpv { get => _highlightsMpv; set => this.RaiseAndSetIfChanged(ref _highlightsMpv, Clamp(value, 0, 100, 85)); }
+        private decimal? _highlightsMpv = 50;
+        public decimal? HighlightsMpv { get => _highlightsMpv; set => this.RaiseAndSetIfChanged(ref _highlightsMpv, Clamp(value, 0, 100, 50)); }
 
-        private decimal? _highlightsRtx = 50;
-        public decimal? HighlightsRtx { get => _highlightsRtx; set => this.RaiseAndSetIfChanged(ref _highlightsRtx, Clamp(value, 0, 100, 50)); }
+        private decimal? _highlightsRtx = 25;
+        public decimal? HighlightsRtx { get => _highlightsRtx; set => this.RaiseAndSetIfChanged(ref _highlightsRtx, Clamp(value, 0, 100, 25)); }
 
-        private decimal? _vibranceMpv = 30;
-        public decimal? VibranceMpv { get => _vibranceMpv; set => this.RaiseAndSetIfChanged(ref _vibranceMpv, Clamp(value, 0, 80, 30)); }
+        private decimal? _vibranceMpv = 15;
+        public decimal? VibranceMpv { get => _vibranceMpv; set => this.RaiseAndSetIfChanged(ref _vibranceMpv, Clamp(value, 0, 80, 15)); }
 
-        private decimal? _vibranceRtx = 20;
-        public decimal? VibranceRtx { get => _vibranceRtx; set => this.RaiseAndSetIfChanged(ref _vibranceRtx, Clamp(value, 0, 80, 20)); }
+        private decimal? _vibranceRtx = 10;
+        public decimal? VibranceRtx { get => _vibranceRtx; set => this.RaiseAndSetIfChanged(ref _vibranceRtx, Clamp(value, 0, 80, 10)); }
 
         private decimal? _subtitleWhite = 200;
         public decimal? SubtitleWhite { get => _subtitleWhite; set => this.RaiseAndSetIfChanged(ref _subtitleWhite, Clamp(value, 80, 1000, 200)); }
@@ -212,13 +238,22 @@ namespace AnimeJaNaiConfEditor.ViewModels
         private bool _enhanceNativeHdr;
         public bool EnhanceNativeHdr { get => _enhanceNativeHdr; set => this.RaiseAndSetIfChanged(ref _enhanceNativeHdr, value); }
 
-        // ---------------------------------------------------------------- displays, per GPU
-        public DisplaySettings Nvidia { get; } = new("nvidia");
-        public DisplaySettings Amd { get; } = new("amd");
+        // ---------------------------------------------------------------- one display
+        public DisplaySettings Display { get; } = new();
+
+        // The GPU is used once to import the previous format, never to select new settings.
+        public void SelectLegacyDisplay(string vendor)
+        {
+            if (_displayEdited) return;
+            _loading = true;
+            try { Display.Read(_conf, vendor); }
+            finally { _loading = false; }
+        }
 
         // ---------------------------------------------------------------- persistence
-        private void ReadValues()
+        private void ReadValues(string? legacyVendor)
         {
+            LinuxOutput = _conf.Get("linux_hdr_output", "auto");
             Upscale = _conf.Get("vsr", "auto").ToLowerInvariant() switch
             {
                 "yes" or "true" or "on" => "auto",
@@ -229,6 +264,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             TargetResolution = NormalizeResolution(_conf.Get("target_resolution", "auto"));
             FrameGeneration = _conf.Get("frame_generation", "off").ToLowerInvariant() == "amf" ? "amf" : "off";
             RenderApi = _conf.Get("render_api", "d3d11").ToLowerInvariant() == "vulkan" ? "vulkan" : "d3d11";
+            if (IsLinux) RenderApi = "vulkan";
             RtxVsrQuality = Number(_conf.Get("rtx_vsr_quality", "2"));
             RtxContrast = Number(_conf.Get("rtx_contrast", "100"));
             RtxSaturation = Number(_conf.Get("rtx_saturation", "100"));
@@ -244,17 +280,14 @@ namespace AnimeJaNaiConfEditor.ViewModels
             var backend = _conf.Get("hdr_backend", "auto").ToLowerInvariant();
             Backend = backend is "rtx" or "mpv" ? backend : "auto";
             Enhance = ParseBool(_conf.Get("grade", "yes"));
-            BlackDepth = Percent(_conf.Get("shadows", "0.30"));
+            BlackDepth = Percent(_conf.Get("shadows", "0.15"));
             SdrWhite = Number(_conf.Get("paper_white", "203"));
-            HighlightsMpv = Percent(_conf.Get("highlights", "0.85"));
-            HighlightsRtx = Percent(_conf.Get("highlights_rtx", "0.50"));
-            VibranceMpv = Percent(_conf.Get("vibrance", "0.30"));
-            VibranceRtx = Percent(_conf.Get("vibrance_rtx", "0.20"));
+            HighlightsMpv = Percent(_conf.Get("highlights", "0.50"));
+            HighlightsRtx = Percent(_conf.Get("highlights_rtx", "0.25"));
+            VibranceMpv = Percent(_conf.Get("vibrance", "0.15"));
+            VibranceRtx = Percent(_conf.Get("vibrance_rtx", "0.10"));
             EnhanceNativeHdr = ParseBool(_conf.Get("grade_native_hdr", "no"));
-            Nvidia.Read(_conf, defaultMode: "follow", defaultPeak: "1000", defaultGamut: "display-p3", defaultOled: "yes");
-            Amd.Read(_conf, defaultMode: "enable", defaultPeak: "auto", defaultGamut: "display-p3", defaultOled: "auto");
-            Nvidia.Changed.Merge(Amd.Changed).Where(_ => !_loading)
-                  .Throttle(TimeSpan.FromMilliseconds(300)).Subscribe(_ => Save());
+            Display.Read(_conf, legacyVendor);
         }
 
         private readonly object _saveLock = new();
@@ -262,6 +295,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         {
             lock (_saveLock)
             {
+                _conf.Set("linux_hdr_output", LinuxOutput);
                 _conf.Set("vsr", Upscale);
                 _conf.Set("target_resolution", NormalizeResolution(TargetResolution));
                 _conf.Set("frame_generation", FrameGeneration);
@@ -287,15 +321,16 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 _conf.Set("vibrance", Fraction(VibranceMpv));
                 _conf.Set("vibrance_rtx", Fraction(VibranceRtx));
                 _conf.Set("grade_native_hdr", EnhanceNativeHdr ? "yes" : "no");
-                Nvidia.Write(_conf);
-                Amd.Write(_conf);
+                Display.Write(_conf);
                 try
                 {
                     if (_conf.Save(_path)) NotifyPlayer();
+                    SaveNotice = "";
                 }
                 catch (Exception e)
                 {
-                    System.Diagnostics.Debug.WriteLine($"HDR settings not saved: {e.Message}");
+                    SaveNotice = "Settings not saved: " + e.Message;
+                    System.Diagnostics.Debug.WriteLine(SaveNotice);
                 }
             }
         }
@@ -303,15 +338,31 @@ namespace AnimeJaNaiConfEditor.ViewModels
         // Live apply: mpv.conf sets input-ipc-server=mpvpipe. If the player is running, every
         // script re-reads the file (user-scripts react to animejanai-reload-options).
         // Settings that only matter when a video starts (RIFE factor) apply from the next file.
-        private static void NotifyPlayer()
+        internal static void NotifyPlayer()
         {
             try
             {
-                using var pipe = new NamedPipeClientStream(".", "mpvpipe", PipeDirection.Out);
-                pipe.Connect(200);
                 var line = Encoding.UTF8.GetBytes("{\"command\":[\"script-message\",\"animejanai-reload-options\"]}\n");
-                pipe.Write(line, 0, line.Length);
-                pipe.Flush();
+                if (OperatingSystem.IsLinux())
+                {
+                    var path = Environment.GetEnvironmentVariable("ANIMEJANAI_IPC_PATH");
+                    if (string.IsNullOrEmpty(path)) return;
+                    using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+                    using var timeout = new CancellationTokenSource(200);
+                    socket.ConnectAsync(new UnixDomainSocketEndPoint(path), timeout.Token).AsTask().GetAwaiter().GetResult();
+                    using var stream = new NetworkStream(socket);
+                    stream.WriteTimeout = 200;
+                    stream.Write(line);
+                    // Drain mpv's acknowledgement before closing so it does not log a broken pipe.
+                    stream.ReadTimeout = 200;
+                    var acknowledgement = new byte[512];
+                    stream.Read(acknowledgement, 0, acknowledgement.Length);
+                }
+                else
+                {
+                    using var pipe = new NamedPipeClientStream(".", "mpvpipe", PipeDirection.Out);
+                    pipe.Connect(200); pipe.Write(line); pipe.Flush();
+                }
             }
             catch (Exception)
             {
@@ -342,14 +393,10 @@ namespace AnimeJaNaiConfEditor.ViewModels
         }
     }
 
-    // Display description for the PC of one GPU vendor (*_nvidia or *_amd keys).
+    // Display description shared by every GPU. Old suffixed keys are read only for migration.
     public class DisplaySettings : ReactiveObject
     {
-        private readonly string _suffix;
-        public DisplaySettings(string suffix) { _suffix = suffix; }
-
-        private bool _isThisPc;
-        public bool IsThisPc { get => _isThisPc; set => this.RaiseAndSetIfChanged(ref _isThisPc, value); }
+        public bool WindowsFeatures => OperatingSystem.IsWindows();
 
         // Windows HDR: "enable" = turned on by the player for playback, then restored; "follow" = untouched.
         private string _windowsHdr = "follow";
@@ -366,7 +413,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         public bool WindowsHdrEnable { get => WindowsHdr == "enable"; set { if (value) WindowsHdr = "enable"; else this.RaisePropertyChanged(); } }
         public bool WindowsHdrFollow { get => WindowsHdr == "follow"; set { if (value) WindowsHdr = "follow"; else this.RaisePropertyChanged(); } }
 
-        private bool _peakAuto;
+        private bool _peakAuto = true;
         public bool PeakAuto
         {
             get => _peakAuto;
@@ -381,10 +428,10 @@ namespace AnimeJaNaiConfEditor.ViewModels
         public bool PeakManual { get => !PeakAuto; set { if (value) PeakAuto = false; else this.RaisePropertyChanged(); } }
         public bool PeakAutoChoice { get => PeakAuto; set { if (value) PeakAuto = true; else this.RaisePropertyChanged(); } }
 
-        private decimal? _peak = 1000;
-        public decimal? Peak { get => _peak; set => this.RaiseAndSetIfChanged(ref _peak, value is decimal d ? Math.Clamp(d, 100, 10000) : 1000); }
+        private decimal? _peak;
+        public decimal? Peak { get => _peak; set => this.RaiseAndSetIfChanged(ref _peak, value is decimal d ? Math.Clamp(d, 100, 10000) : null); }
 
-        private string _gamut = "display-p3";
+        private string _gamut = "auto";
         public string Gamut
         {
             get => _gamut;
@@ -403,14 +450,19 @@ namespace AnimeJaNaiConfEditor.ViewModels
         private bool _oled;
         public bool Oled { get => _oled; set => this.RaiseAndSetIfChanged(ref _oled, value); }
 
-        // NVIDIA keeps the historical key name "mode"; AMD/Intel use "amd_mode".
-        private string ModeKey => _suffix == "nvidia" ? "mode" : "amd_mode";
-
-        internal void Read(ConfLines conf, string defaultMode, string defaultPeak, string defaultGamut, string defaultOled)
+        internal void Read(ConfLines conf, string? legacyVendor)
         {
-            var mode = conf.Get(ModeKey, defaultMode).ToLowerInvariant();
-            WindowsHdr = mode is "enable" or "follow" ? mode : defaultMode;
-            var peak = conf.Get("peak_" + _suffix, defaultPeak).Trim().ToLowerInvariant();
+            // Missing/blank common keys inherit the active legacy bank without rewriting it.
+            string suffix = legacyVendor == "amd" || legacyVendor == "intel" ? "amd" : "nvidia";
+            if (legacyVendor is null && conf.Get("peak_nvidia", "") == "" && conf.Get("gamut_nvidia", "") == "") suffix = "amd";
+            string Read(string key, string oldKey, string fallback)
+            {
+                var common = conf.Get(key, "").Trim();
+                return common.Length > 0 ? common : conf.Get(oldKey, fallback).Trim();
+            }
+            var mode = Read("windows_hdr", suffix == "nvidia" ? "mode" : "amd_mode", "follow").ToLowerInvariant();
+            WindowsHdr = mode is "enable" or "follow" ? mode : "follow";
+            var peak = Read("display_peak", "peak_" + suffix, "auto").ToLowerInvariant();
             if (decimal.TryParse(peak, NumberStyles.Float, CultureInfo.InvariantCulture, out var nits))
             {
                 PeakAuto = false;
@@ -419,18 +471,19 @@ namespace AnimeJaNaiConfEditor.ViewModels
             else
             {
                 PeakAuto = true;
+                Peak = null;
             }
-            var gamut = conf.Get("gamut_" + _suffix, defaultGamut).ToLowerInvariant();
+            var gamut = Read("display_gamut", "gamut_" + suffix, "auto").ToLowerInvariant();
             Gamut = gamut is "auto" or "display-p3" or "bt.2020" ? gamut : "auto";
-            Oled = conf.Get("oled_" + _suffix, defaultOled).Trim().ToLowerInvariant() == "yes";
+            Oled = Read("display_oled", "oled_" + suffix, "no").ToLowerInvariant() == "yes";
         }
 
         internal void Write(ConfLines conf)
         {
-            conf.Set(ModeKey, WindowsHdr);
-            conf.Set("peak_" + _suffix, PeakAuto ? "auto" : ((int)(Peak ?? 1000)).ToString(CultureInfo.InvariantCulture));
-            conf.Set("gamut_" + _suffix, Gamut);
-            conf.Set("oled_" + _suffix, Oled ? "yes" : "auto");
+            conf.Set("windows_hdr", WindowsHdr);
+            conf.Set("display_peak", PeakAuto || Peak is null ? "auto" : ((int)Peak.Value).ToString(CultureInfo.InvariantCulture));
+            conf.Set("display_gamut", Gamut);
+            conf.Set("display_oled", Oled ? "yes" : "no");
         }
     }
 
@@ -440,6 +493,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         private static readonly Regex KEY = new(@"^\s*([A-Za-z0-9_\-]+)\s*=(.*)$");
         private readonly List<string> _lines = new();
         private string _newline = Environment.NewLine;
+        private string? _original;
 
         public static ConfLines Load(string path)
         {
@@ -447,6 +501,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             if (File.Exists(path))
             {
                 var text = File.ReadAllText(path, Encoding.UTF8);
+                conf._original = text;
                 conf._newline = text.Contains("\r\n") ? "\r\n" : "\n";
                 conf._lines.AddRange(text.Replace("\r\n", "\n").Split('\n'));
                 if (conf._lines.Count > 0 && conf._lines[^1] == "")
@@ -475,7 +530,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         {
             var i = Find(key);
             if (i < 0) return fallback;
-            var value = KEY.Match(_lines[i]).Groups[2].Value.Trim();
+            var value = Regex.Replace(KEY.Match(_lines[i]).Groups[2].Value, @"\s+[#;].*$", "").Trim();
             return value.Length == 0 ? fallback : value;
         }
 
@@ -484,7 +539,11 @@ namespace AnimeJaNaiConfEditor.ViewModels
             var i = Find(key);
             var line = $"{key}={value}";
             if (i < 0) _lines.Add(line);
-            else _lines[i] = line;
+            else
+            {
+                var comment = Regex.Match(_lines[i], @"\s+[#;].*$");
+                _lines[i] = line + (comment.Success ? comment.Value : "");
+            }
         }
 
         // Returns true when the file content changed.
@@ -493,9 +552,12 @@ namespace AnimeJaNaiConfEditor.ViewModels
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var text = string.Join(_newline, _lines) + _newline;
             if (File.Exists(path) && File.ReadAllText(path, Encoding.UTF8) == text) return false;
-            var tmp = path + ".tmp";
+            if ((File.Exists(path) ? File.ReadAllText(path, Encoding.UTF8) : null) != _original)
+                throw new IOException("HDR settings changed externally. Reopen the Manager before saving.");
+            var tmp = path + ".tmp-" + Guid.NewGuid().ToString("N");
             File.WriteAllText(tmp, text, new UTF8Encoding(false));
             File.Move(tmp, path, true);
+            _original = text;
             return true;
         }
     }

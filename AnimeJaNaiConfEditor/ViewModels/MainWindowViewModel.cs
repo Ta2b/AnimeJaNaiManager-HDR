@@ -1,4 +1,4 @@
-﻿using AnimeJaNaiConfEditor.Services;
+using AnimeJaNaiConfEditor.Services;
 using Avalonia.Collections;
 using ReactiveUI;
 using Salaros.Configuration;
@@ -25,8 +25,11 @@ namespace AnimeJaNaiConfEditor.ViewModels
         public MainWindowViewModel()
         {
             Instance = this;
+            _expectedHash = AnimeJaNai.Platform.PlatformServices.FileHash(AnimeJaNaiConfPath);
+            _expectedBank = AnimeJaNai.Platform.PlatformServices.CurrentBank(RootDir);
             AnimeJaNaiConf = ReadAnimeJaNaiConf(AnimeJaNaiConfPath, true);
-            HdrSettings = new HdrSettings(HdrConfPath);
+            HdrSettings = new HdrSettings(HdrConfPath,
+                _expectedBank.Contains("nvidia") ? "nvidia" : _expectedBank.Contains("amd") ? "amd" : null);
             Engines = new EngineStore(DataDir);
             Engines.Refresh();
             // Built after the user conf loads so the read-only default profiles reflect the saved
@@ -54,8 +57,21 @@ namespace AnimeJaNaiConfEditor.ViewModels
         // Install state comes from the disk (works offline); GPU identity comes from the
         // component engine once its refresh completes.
 
-        public static bool TrtOnDisk() =>
-            File.Exists(Path.Combine(DataDir, "inference", "nvinfer_11.dll"));
+        public bool WindowsFeatures => OperatingSystem.IsWindows();
+        public bool LinuxFeatures => OperatingSystem.IsLinux();
+        private string _expectedHash = "";
+        private string _expectedBank = "";
+        private readonly object _profileSaveLock = new();
+        public static bool TrtOnDisk() => File.Exists(Path.Combine(
+            Environment.GetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR") ?? Path.Combine(DataDir, "inference"),
+            OperatingSystem.IsLinux() ? "libnvinfer.so.11" : "nvinfer_11.dll"));
+
+        public static bool VulkanOnDisk() => OperatingSystem.IsLinux() && File.Exists(Path.Combine(
+            Environment.GetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR") ?? Path.Combine(DataDir, "inference"), "libaji_vulkan.so"));
+        public static bool VulkanRifeOnDisk() => File.Exists(Path.Combine(DataDir, "rife-vulkan", "rife-v4.6", "flownet.param")) &&
+            File.Exists(Path.Combine(DataDir, "rife-vulkan", "rife-v4.6", "flownet.bin"));
+        private bool _vulkanSelectable;
+        public bool VulkanSelectable { get => _vulkanSelectable; set => this.RaiseAndSetIfChanged(ref _vulkanSelectable, value); }
 
         public static bool RifeOnDisk() =>
             Directory.Exists(Path.Combine(DataDir, "rife")) &&
@@ -117,14 +133,30 @@ namespace AnimeJaNaiConfEditor.ViewModels
         {
             bool trtInstalled = TrtOnDisk();
             bool? nvidia = ComponentManager.GpuNvidia;
-            RtxHdrSelectable = nvidia != false;
-            AmfSelectable = nvidia != true;
-            HdrSettings.Nvidia.IsThisPc = nvidia == true;
+            if (LinuxFeatures && nvidia is null)
+                nvidia = AnimeJaNai.Platform.PlatformServices.SelectAdapter(AnimeJaNai.Platform.PlatformServices.LinuxAdapters()).vendor == "nvidia";
+            RtxHdrSelectable = WindowsFeatures && nvidia != false;
+            AmfSelectable = WindowsFeatures && nvidia != true;
+            if (nvidia is not null) HdrSettings.SelectLegacyDisplay(nvidia == true ? "nvidia" : "amd");
             Engines.GpuName = ComponentManager.GpuName;
             Engines.Refresh();
-            HdrSettings.Amd.IsThisPc = nvidia == false;
             bool trtUsable = trtInstalled && nvidia != false;
             TrtSelectable = trtUsable;
+
+            if (LinuxFeatures)
+            {
+                VulkanSelectable = VulkanOnDisk();
+                AnimeJaNaiConf.BackendAutoFallback = false;
+                if (AnimeJaNaiConf.DirectMlSelected) AnimeJaNaiConf.SetTensorRtSelected();
+                BackendNotice = AnimeJaNaiConf.VulkanSelected
+                    ? (VulkanSelectable ? "Linux Vulkan: spatial SPAN AnimeJaNai and RIFE 4.6. SDR sources, even dimensions; CPU/GPU transfers."
+                        : "Vulkan library missing. Normal playback remains available.")
+                    : (trtUsable ? "Linux TensorRT: NVIDIA only. Use ONNX RIFE models, not Vulkan RIFE 4.6."
+                        : "TensorRT unavailable. Select Vulkan for AMD or NVIDIA when the Vulkan package is installed.");
+                RifeMissing = AnimeJaNaiConf.VulkanSelected ? !VulkanRifeOnDisk() : !RifeOnDisk();
+                RefreshBackendModelLists();
+                return;
+            }
 
             string notice = "";
             if (trtUsable && AnimeJaNaiConf != null && AnimeJaNaiConf.DirectMlSelected &&
@@ -606,10 +638,23 @@ chain_2_rife=no";
         public AvaloniaList<string> GetAllModels()
         {
             return new AvaloniaList<string>(Directory.GetFiles(OnnxPath).Where(filename => Path.GetExtension(filename).Equals(".onnx", StringComparison.CurrentCultureIgnoreCase))
+                .Where(filename => AnimeJaNaiConf?.VulkanSelected != true ||
+                    (File.Exists(Path.ChangeExtension(filename, ".ncnn.param")) && File.Exists(Path.ChangeExtension(filename, ".ncnn.bin"))))
                 .Select(filename => Path.GetFileNameWithoutExtension(filename))
                 .Order().ToList());
         }
 
+
+        public void RefreshBackendModelLists()
+        {
+            foreach (var slot in AnimeJaNaiConf.UpscaleSlots)
+                foreach (var chain in slot.Chains)
+                {
+                    foreach (var model in chain.Models) model.AllModels = GetAllModels();
+                    chain.RifeModelList = new(RifeModels);
+                    chain.RaisePropertyChanged(nameof(UpscaleChain.RifeToggleEnabled));
+                }
+        }
 
         public void Validate()
         {
@@ -622,6 +667,8 @@ chain_2_rife=no";
         {
             get
             {
+                if (Instance?.AnimeJaNaiConf?.VulkanSelected == true)
+                    return VulkanRifeOnDisk() ? [RifeValueToLabel("46")] : [];
                 if (_rifeModels == null)
                 {
                     var models = new List<string>();
@@ -778,6 +825,9 @@ chain_2_rife=no";
                     case Backend.DirectML:
                     case Backend.NCNN: // retired; the inference shim treats NCNN as DirectML
                         animeJaNaiConf.SetDirectMlSelected();
+                        break;
+                    case Backend.Vulkan:
+                        animeJaNaiConf.SetVulkanSelected();
                         break;
                     case Backend.TensorRT:
                     default:
@@ -1048,13 +1098,32 @@ chain_2_rife=no";
 
         public void WriteAnimeJaNaiConf()
         {
-            WriteAnimeJaNaiConf(AnimeJaNaiConfPath);
+            try { WriteAnimeJaNaiConf(AnimeJaNaiConfPath); }
+            catch (IOException e) { BackendNotice = e.Message; }
         }
 
         public void WriteAnimeJaNaiConf(string fullPath)
         {
             var parser = ParsedAnimeJaNaiConf(AnimeJaNaiConf);
-            parser?.Save(fullPath);
+            if (parser is null) return;
+            lock (_profileSaveLock)
+            {
+                var temp = fullPath + ".manager-" + Guid.NewGuid().ToString("N");
+                try
+                {
+                    parser.Save(temp);
+                    var text = IniPreservingSave.Merge(File.Exists(fullPath) ? File.ReadAllText(fullPath) : "", File.ReadAllText(temp));
+                    if (Path.GetFullPath(fullPath) == Path.GetFullPath(AnimeJaNaiConfPath) &&
+                        Path.GetFullPath(DataDir) == Path.GetFullPath(Path.Combine(RootDir, "animejanai")))
+                    {
+                        AnimeJaNai.Platform.PlatformServices.SaveActiveConfig(RootDir, _expectedHash, System.Text.Encoding.UTF8.GetBytes(text), _expectedBank);
+                        _expectedHash = AnimeJaNai.Platform.PlatformServices.FileHash(fullPath);
+                        HdrSettings.NotifyPlayer();
+                    }
+                    else File.WriteAllText(fullPath, text);
+                }
+                finally { if (File.Exists(temp)) File.Delete(temp); }
+            }
         }
 
         public static ConfigParser? ParsedAnimeJaNaiConf(AnimeJaNaiConf conf)
@@ -1238,7 +1307,7 @@ chain_2_rife=no";
 
                 if (OperatingSystem.IsWindows())
                 {
-                    process.StartInfo.FileName = "cmd.exe";
+                    process.StartInfo.FileName = OperatingSystem.IsWindows() ? "cmd.exe" : "sh";
                     process.StartInfo.Arguments = @"/C .\benchmarks\animejanai_benchmark_all.bat";
                 }
                 else
@@ -1265,7 +1334,7 @@ chain_2_rife=no";
         {
             await Task.Run(() =>
             {
-                Process.Start("explorer.exe", OnnxPath);
+                Process.Start(new ProcessStartInfo(OperatingSystem.IsWindows() ? "explorer.exe" : "xdg-open") { ArgumentList = { OnnxPath }, UseShellExecute = false });
             });
         }
 
@@ -1322,6 +1391,9 @@ chain_2_rife=no";
 
         private void WriteDefaultProfile(bool upscaleOff = false)
         {
+            if (LinuxFeatures && !(AnimeJaNaiConf.VulkanSelected ? VulkanSelectable : TrtSelectable) && !upscaleOff) { BackendNotice = "The selected inference backend is unavailable. Normal playback remains available."; return; }
+            if (LinuxFeatures && AnimeJaNaiConf.VulkanSelected && !upscaleOff && ShowDefaultProfiles)
+            { BackendNotice = "Vulkan uses custom Linux slots 1–4; built-in ONNX profiles are unavailable."; return; }
             var profile = upscaleOff ? "upscale-off" : CurrentSlot.MpvProfileName;
             AnimeJaNaiConf.DefaultSlot = MpvProfileToSlot(profile);
             WriteAnimeJaNaiConf();
@@ -1363,6 +1435,7 @@ chain_2_rife=no";
                     x => x.EnableLogging,
                     x => x.TensorRtSelected,
                     x => x.DirectMlSelected,
+                    x => x.VulkanSelected,
                     x => x.BackendAutoFallback,
                     x => x.TrtEngineSettings).Subscribe(x =>
                     {
@@ -1431,6 +1504,14 @@ chain_2_rife=no";
             {
                 this.RaiseAndSetIfChanged(ref _directMlSelected, value);
             }
+        }
+
+        private bool _vulkanSelected;
+        [DataMember]
+        public bool VulkanSelected
+        {
+            get => _vulkanSelected;
+            set => this.RaiseAndSetIfChanged(ref _vulkanSelected, value);
         }
 
         // Per-profile Standard vs Sharp model selection for the three built-in default profiles.
@@ -1613,18 +1694,37 @@ chain_2_rife=no";
         {
             TensorRtSelected = true;
             DirectMlSelected = false;
+            VulkanSelected = false;
         }
 
         public void SetDirectMlSelected()
         {
+            if (OperatingSystem.IsLinux()) { SetTensorRtSelected(); return; }
             DirectMlSelected = true;
             TensorRtSelected = false;
+            VulkanSelected = false;
+        }
+
+        public void SetVulkanSelected()
+        {
+            if (!OperatingSystem.IsLinux()) { SetTensorRtSelected(); return; }
+            TensorRtSelected = false;
+            DirectMlSelected = false;
+            VulkanSelected = true;
+        }
+
+        public void UserSelectVulkan()
+        {
+            BackendAutoFallback = false;
+            SetVulkanSelected();
+            Vm?.RefreshComponentAwareness();
         }
 
         public void UserSelectTensorRt()
         {
             BackendAutoFallback = false;
             SetTensorRtSelected();
+            Vm?.RefreshComponentAwareness();
         }
 
         public void UserSelectDirectMl()
@@ -1651,7 +1751,7 @@ chain_2_rife=no";
             set => this.RaiseAndSetIfChanged(ref _gpuSubtitles, value);
         }
 
-        public Backend SelectedBackend => DirectMlSelected ? Backend.DirectML : Backend.TensorRT;
+        public Backend SelectedBackend => VulkanSelected ? Backend.Vulkan : DirectMlSelected ? Backend.DirectML : Backend.TensorRT;
 
         private bool _autoDisplayRefresh;
         [DataMember]
@@ -2080,6 +2180,7 @@ chain_2_rife=no";
     {
         TensorRT,
         DirectML,
+        Vulkan,
         NCNN
     }
 }

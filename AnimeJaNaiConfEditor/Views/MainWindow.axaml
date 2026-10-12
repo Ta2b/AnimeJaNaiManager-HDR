@@ -203,369 +203,226 @@
     <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" >
       <StackPanel Margin="20">
       
-        <!-- Global Settings -->
+        <!-- Global Settings: one page, one display, advanced controls folded. -->
         <Grid IsVisible="{Binding ShowGlobalSettings}" RowDefinitions="Auto,*">
-          <StackPanel Grid.Row="1">
-            <Grid ColumnDefinitions="Auto,*" Margin="10,10,0,10">
-              <CheckBox Grid.Column="0" IsChecked="{Binding AnimeJaNaiConf.EnableLogging}" Content="Enable Logging" />
-              <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0">
-                Enable logging to view which models are being used and which resolutions they are scaling from.
-                The log file is created at <Run FontFamily="Consolas">animejanai.log</Run> in the same directory as this config editor.
-              </TextBlock>
-            </Grid>
+          <StackPanel Grid.Row="1" Name="GlobalSettingsPanel" MaxWidth="1080" HorizontalAlignment="Left" Margin="10,12" Spacing="12">
+            <TextBlock Text="Global Settings" FontSize="22" FontWeight="SemiBold" />
+            <TextBlock Classes="help" Text="Playback and display settings. Your saved choices are kept when updating." />
+            <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding HdrSettings.SaveNotice}" IsVisible="{Binding HdrSettings.HasSaveNotice}" Foreground="Orange" />
 
-            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
-              <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Upscaling Backend</TextBlock>
-                <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TensorRtSelected}" Content="TensorRT" Command="{Binding AnimeJaNaiConf.UserSelectTensorRt}" IsEnabled="{Binding TrtSelectable}" />
-                <ToggleButton IsChecked="{Binding AnimeJaNaiConf.DirectMlSelected}" Content="DirectML" Command="{Binding AnimeJaNaiConf.UserSelectDirectMl}" />
+            <Border Classes="border">
+              <StackPanel Spacing="10">
+                <TextBlock Text="AnimeJaNai" FontWeight="SemiBold" FontSize="16" />
+                <WrapPanel>
+                  <TextBlock Text="Inference engine" Margin="0,0,12,0" VerticalAlignment="Center" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TensorRtSelected}" Content="TensorRT" Command="{Binding AnimeJaNaiConf.UserSelectTensorRt}" IsEnabled="{Binding TrtSelectable}" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.VulkanSelected}" Content="Vulkan" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding VulkanSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectVulkan}" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.DirectMlSelected}" Content="DirectML" IsEnabled="{Binding WindowsFeatures}" Command="{Binding AnimeJaNaiConf.UserSelectDirectMl}" />
+                </WrapPanel>
+                <TextBlock Classes="help" Text="TensorRT: NVIDIA. DirectML: Windows. Vulkan: Linux. Choose the startup profile in Profiles; restart playback after changing the engine." />
+                <TextBlock TextWrapping="Wrap" Foreground="Orange" IsVisible="{Binding HasBackendNotice}" Text="{Binding BackendNotice}" />
               </StackPanel>
-              <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve"><Bold>TensorRT</Bold>: Fastest option but NVIDIA only. Supports fp16 and fp32 ONNX models. fp16 models are recommended for faster performance and reduced VRAM usage without any loss in quality. The initial engine generation may require several minutes but only needs to be done once.
-<Bold>DirectML</Bold>: Compatible with NVIDIA, AMD, and Intel GPUs but slower than TensorRT.
-  </TextBlock>
-            </Grid>
+            </Border>
 
-            <TextBlock Margin="10,0,0,10" TextWrapping="Wrap" Foreground="Orange" IsVisible="{Binding HasBackendNotice}" Text="{Binding BackendNotice}" />
-
-            <TextBlock Margin="10,0,0,10" Classes="help" TextWrapping="Wrap">Switching the backend takes effect after you restart the player.</TextBlock>
-
-            <StackPanel IsVisible="{Binding AnimeJaNaiConf.TensorRtSelected}" Margin="10,0,0,10">
-              <TextBlock Margin="0,10,0,5" Text="TensorRT Engine Settings" />
-              <Border Classes="border">
-                <StackPanel Margin="10">
-
-                  <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,5">
-                    <StackPanel Grid.Column="0" Orientation="Horizontal">
-                      <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Engine Type</TextBlock>
-                      <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TrtStaticOnnxSelected}" Content="Static ONNX" Command="{Binding AnimeJaNaiConf.SetTrtStaticOnnx}" />
-                      <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TrtStaticSelected}" Content="Static" Command="{Binding AnimeJaNaiConf.SetTrtStatic}" />
-                      <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TrtDynamicSelected}" Content="Dynamic" Command="{Binding AnimeJaNaiConf.SetTrtDynamic}" />
-                    </StackPanel>
-                    <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" xml:space="preserve">Which input resolutions the engine is built for. <Bold>Static ONNX</Bold> uses the ONNX model's shape. <Bold>Static</Bold> builds for a single resolution and rebuilds when it changes. <Bold>Dynamic</Bold> builds one engine for the resolution range specified below.</TextBlock>
-                  </Grid>
-
-                  <StackPanel Orientation="Horizontal" Margin="0,0,0,5" IsVisible="{Binding AnimeJaNaiConf.TrtDynamicSelected}">
-                    <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Min Resolution</TextBlock>
-                    <ui:FAComboBox IsEditable="True" Width="120" MaxDropDownHeight="600" Text="{Binding AnimeJaNaiConf.TrtDynamicMinResolution, Mode=TwoWay}"
-                                   ItemsSource="{Binding CommonResolutions}" />
-                    <TextBlock Margin="10,0,5,0" VerticalAlignment="Center">Opt Resolution</TextBlock>
-                    <ui:FAComboBox IsEditable="True" Width="120" MaxDropDownHeight="600" Text="{Binding AnimeJaNaiConf.TrtDynamicOptResolution, Mode=TwoWay}"
-                                   ItemsSource="{Binding CommonResolutions}" />
-                    <TextBlock Margin="10,0,5,0" VerticalAlignment="Center">Max Resolution</TextBlock>
-                    <ui:FAComboBox IsEditable="True" Width="120" MaxDropDownHeight="600" Text="{Binding AnimeJaNaiConf.TrtDynamicMaxResolution, Mode=TwoWay}"
-                                   ItemsSource="{Binding CommonResolutions}" />
-                  </StackPanel>
-
-                  <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,5">
-                    <StackPanel Grid.Column="0" Orientation="Horizontal">
-                      <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Builder Optimization Level</TextBlock>
-                      <ui:FAComboBox IsEditable="True" Width="120" MaxDropDownHeight="600" Text="{Binding AnimeJaNaiConf.TrtBuilderOptimizationLevel, Mode=TwoWay}"
-                                     ItemsSource="{Binding BuilderOptimizationLevels}" />
-                    </StackPanel>
-                    <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0">Higher levels (0-5) take longer to build the engine but can produce a faster engine. Default is 5.</TextBlock>
-                  </Grid>
-
-                  <TextBox Text="{Binding AnimeJaNaiConf.TrtEngineSettings}" HorizontalAlignment="Stretch" TextWrapping="Wrap" AcceptsReturn="False" MinHeight="70" VerticalContentAlignment="Top" />
-
-                  <Grid ColumnDefinitions="Auto,*" Margin="0,10,0,0">
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="5">
-                      <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Built Engines" />
-                      <Button Content="Delete Outdated" Command="{Binding Engines.DeleteOutdated}" IsEnabled="{Binding Engines.HasOutdated}" />
-                      <Button Content="{Binding Engines.DeleteAllText}" Command="{Binding Engines.DeleteAll}" IsEnabled="{Binding Engines.HasEngines}" />
-                    </StackPanel>
-                    <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" TextWrapping="Wrap" Text="{Binding Engines.Summary, StringFormat='{}{0}. Outdated = built for another TensorRT version or GPU; they can never load again. Any deleted engine is rebuilt on the next play that needs it.'}" />
-                  </Grid>
-                </StackPanel>
-              </Border>
-            </StackPanel>
-
-            <Grid ColumnDefinitions="Auto,*" Margin="10,10,0,10">
-              <CheckBox Grid.Column="0" IsChecked="{Binding AnimeJaNaiConf.GpuSubtitles}" Content="GPU Subtitle Rendering (Experimental)" />
-              <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" TextWrapping="Wrap" xml:space="preserve"><Bold>On</Bold>: sharper subtitles. Rendered at your display resolution instead of being baked into the video, so text stays crisp and isn't distorted by upscaling. Experimental: may cost some performance or have bugs.
-<Bold>Off</Bold> (default): fastest and most stable. Subtitles are baked into the video. Best for most users.</TextBlock>
-            </Grid>
-
-            <TextBlock Margin="10,0,0,10" Classes="help" TextWrapping="Wrap">Subtitle rendering changes take effect after you restart the player.</TextBlock>
-
-            <CheckBox Margin="10,10,0,0" IsChecked="{Binding AnimeJaNaiConf.AutoDisplayRefresh}" Content="Automatic Display Refresh Rate (Experimental)" />
-            <TextBlock Margin="10,0,0,10" Classes="help" TextWrapping="Wrap">Windows only. Chooses one refresh rate before playback and keeps it for the whole episode. Local videos are checked first, which may add a few seconds at startup. Fixed-rate videos use a matching rate. Mixed-rate videos prefer a rate matching all their cadences; otherwise, AJN chooses the rate with the least estimated timing error across the episode. Unverified videos use the highest supported rate. Resolution stays unchanged. Your screen may briefly go black during the initial switch. The original rate is restored when playback ends. Off by default; restart the player after changing this setting.</TextBlock>
-            <!-- ===== Display Upscaling & HDR (portable_config/script-opts/animejanai_hdr_auto.conf) ===== -->
-            <Separator Margin="10,10,0,10" />
-
-            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
-              <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Upscale to Display</TextBlock>
-                <ToggleButton IsChecked="{Binding HdrSettings.UpscaleAuto}" Content="Auto" />
-                <ToggleButton IsChecked="{Binding HdrSettings.UpscaleNvidia}" Content="RTX Video Super Resolution" IsEnabled="{Binding RtxHdrSelectable}" />
-                <ToggleButton IsChecked="{Binding HdrSettings.UpscaleAmd}" Content="AMD VideoSR" IsEnabled="{Binding AmfSelectable}" />
-                <ToggleButton IsChecked="{Binding HdrSettings.UpscaleClassic}" Content="Standard" />
-                <ToggleButton IsChecked="{Binding HdrSettings.UpscaleOff}" Content="Off" />
-              </StackPanel>
-              <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve">Final scaling after AnimeJaNai, up to the target resolution. <Bold>Auto</Bold>: RTX Video Super Resolution on NVIDIA, AMD VideoSR on AMD, standard GPU scaling elsewhere. <Bold>Standard</Bold>: Direct3D 11 scaling on any GPU. <Bold>Off</Bold>: the player only fits the video to the window.</TextBlock>
-            </Grid>
-
-            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
-              <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Target Resolution</TextBlock>
-                <ui:FAComboBox IsEditable="True" Width="140" MaxDropDownHeight="600" Text="{Binding HdrSettings.TargetResolution, Mode=TwoWay}"
-                               ItemsSource="{Binding HdrTargetResolutions}" />
-              </StackPanel>
-              <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve"><Bold>auto</Bold>: the resolution of the screen the player is on. Or a fixed size such as 2560x1440. The aspect ratio is always kept; this does not change the Windows display resolution.</TextBlock>
-            </Grid>
-
-            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
-              <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <CheckBox IsChecked="{Binding HdrSettings.MpvTrueHdrLook}" Content="TrueHDR Look for mpv Conversion" />
-                <TextBlock Margin="15,0,5,0" VerticalAlignment="Center" Text="Contrast" />
-                <NumericUpDown Value="{Binding HdrSettings.MpvContrast}" Minimum="100" Maximum="200" Increment="10" FormatString="0" Width="110" IsEnabled="{Binding HdrSettings.MpvTrueHdrLook}" />
-                <TextBlock Margin="15,0,5,0" VerticalAlignment="Center" Text="Saturation" />
-                <NumericUpDown Value="{Binding HdrSettings.MpvSaturation}" Minimum="100" Maximum="200" Increment="10" FormatString="0" Width="110" IsEnabled="{Binding HdrSettings.MpvTrueHdrLook}" />
-              </StackPanel>
-              <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve">When mpv converts SDR to HDR (AMD and Intel GPUs, the mpv backend, or no active AnimeJaNai chain), gives it the look of RTX Video HDR: SDR white reaches the display peak, midtones stay near 50 nits, then the same grade as on TrueHDR. The curve was measured on RTX TrueHDR. <Bold>Contrast</Bold> and <Bold>Saturation</Bold> use the NVIDIA App scale: 100 neutral, 200 maximum. Off: the original mpv conversion (SDR White Level, highlights by area). Applied to the playing video.</TextBlock>
-            </Grid>
-
-            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
-              <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Render API</TextBlock>
-                <ToggleButton IsChecked="{Binding HdrSettings.RenderApiD3D11}" Content="Direct3D 11" />
-                <ToggleButton IsChecked="{Binding HdrSettings.RenderApiVulkan}" Content="Vulkan" IsEnabled="{Binding RtxHdrSelectable}" />
-              </StackPanel>
-              <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve">How the player draws the picture on an NVIDIA GPU. <Bold>Direct3D 11</Bold>: RTX Video HDR and RTX Video Super Resolution run as player filters, with the sliders of the NVIDIA App. <Bold>Vulkan</Bold>: they run inside the AnimeJaNai engine and frames never leave GPU memory; needed for NVIDIA Smooth Motion. Requires aji_trt_rtx.dll and aji_rtx.dll in animejanai/inference, otherwise the player converts to HDR itself. Restart the player after changing this. AMD and Intel always use Direct3D 11.</TextBlock>
-            </Grid>
-
-            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10" IsEnabled="{Binding HdrSettings.RenderApiVulkan}">
-              <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="VSR Quality" />
-                <NumericUpDown Value="{Binding HdrSettings.RtxVsrQuality}" Minimum="1" Maximum="4" Increment="1" FormatString="0" Width="100" />
-                <TextBlock Margin="15,0,5,0" VerticalAlignment="Center" Text="Contrast" />
-                <NumericUpDown Value="{Binding HdrSettings.RtxContrast}" Minimum="0" Maximum="200" Increment="10" FormatString="0" Width="110" />
-                <TextBlock Margin="15,0,5,0" VerticalAlignment="Center" Text="Saturation" />
-                <NumericUpDown Value="{Binding HdrSettings.RtxSaturation}" Minimum="0" Maximum="200" Increment="10" FormatString="0" Width="110" />
-                <TextBlock Margin="15,0,5,0" VerticalAlignment="Center" Text="Middle Grey" />
-                <NumericUpDown Value="{Binding HdrSettings.RtxMiddleGray}" Minimum="10" Maximum="100" Increment="5" FormatString="0" Width="110" />
-                <CheckBox Margin="15,0,0,0" IsChecked="{Binding HdrSettings.SkipHeldFrames}" Content="Reuse Held Frames" />
-              </StackPanel>
-              <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve">With Vulkan only. <Bold>VSR Quality</Bold> 1 (fast) to 4 (best, heaviest). <Bold>Contrast</Bold>, <Bold>Saturation</Bold> (100 = neutral) and <Bold>Middle Grey</Bold> are the RTX Video HDR settings; here they replace the NVIDIA App sliders. <Bold>Reuse Held Frames</Bold>: anime repeats each drawing over two or three frames; a frame identical to the last processed one reuses its result instead of running RIFE, the model, VSR and TrueHDR again. Lower average GPU load, same picture. Applied to the playing video.</TextBlock>
-            </Grid>
-
-            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
-              <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Extra Frame Generation</TextBlock>
-                <ToggleButton IsChecked="{Binding HdrSettings.FrameGenerationOff}" Content="Off" />
-                <ToggleButton IsChecked="{Binding HdrSettings.FrameGenerationAmf}" Content="AMD AMF x2" IsEnabled="{Binding AmfSelectable}" />
-              </StackPanel>
-              <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve">Doubles the frame rate again after AnimeJaNai and RIFE, for any profile. <Bold>AMD AMF x2</Bold>: AMD frame rate conversion inside the player (AMD GPUs, sources up to 60 fps after RIFE). <Bold>NVIDIA Smooth Motion</Bold> is a driver feature: NVIDIA App > Graphics > Program Settings > mpvnet.exe > Smooth Motion. <Bold>AMD Fluid Motion Frames</Bold> is set in AMD Software: Adrenalin Edition. Use only one frame generation at a time.</TextBlock>
-            </Grid>
-
-            <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
-              <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <CheckBox IsChecked="{Binding HdrSettings.RifeDisplaySync}" Content="Match RIFE to Display Refresh" />
-                <TextBlock Margin="15,0,5,0" VerticalAlignment="Center" Text="Max Factor" />
-                <NumericUpDown Value="{Binding HdrSettings.RifeMaxFactor}" Minimum="1" Maximum="8" Increment="1" FormatString="0" Width="110" IsEnabled="{Binding HdrSettings.RifeDisplaySync}" />
-              </StackPanel>
-              <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve">For each video, picks the RIFE factor (such as 2, 5/2 or 5/3) that makes every frame stay on screen for the same number of refreshes: no judder. Applies to profiles with RIFE enabled, from the next video. <Bold>Max Factor</Bold> limits the GPU load: with "Interpolate before upscaling", the model also runs on every interpolated frame. Off while Automatic Display Refresh Rate is on (it picks the refresh instead).</TextBlock>
-            </Grid>
-
-            <Grid ColumnDefinitions="Auto,*" Margin="10,10,0,10">
-              <CheckBox Grid.Column="0" IsChecked="{Binding HdrSettings.HdrConversion}" Content="SDR to HDR Conversion" />
-              <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" TextWrapping="Wrap" xml:space="preserve"><Bold>On</Bold>: SDR videos are converted to HDR on HDR displays, with the look set below. Native HDR videos always play in HDR.
-<Bold>Off</Bold>: SDR videos stay SDR and the player never changes the Windows HDR setting.</TextBlock>
-            </Grid>
-
-            <StackPanel IsEnabled="{Binding HdrSettings.HdrConversion}" Margin="10,0,0,10">
-
-              <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="0,10,0,10">
-                <StackPanel Grid.Column="0" Orientation="Horizontal">
-                  <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">SDR to HDR Backend</TextBlock>
-                  <ToggleButton IsChecked="{Binding HdrSettings.BackendAuto}" Content="Auto" />
-                  <ToggleButton IsChecked="{Binding HdrSettings.BackendRtx}" Content="RTX Video HDR" IsEnabled="{Binding RtxHdrSelectable}" />
-                  <ToggleButton IsChecked="{Binding HdrSettings.BackendMpv}" Content="mpv" />
-                </StackPanel>
-                <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" xml:space="preserve"><Bold>Auto</Bold>: RTX Video HDR on NVIDIA, mpv on AMD and Intel. <Bold>RTX Video HDR</Bold>: NVIDIA's AI conversion; its own brightness, contrast and saturation are set in the NVIDIA App. <Bold>mpv</Bold>: works on every GPU; SDR white is placed at the SDR White Level and the enhancement creates the highlights.</TextBlock>
-              </Grid>
-
-              <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="0,0,0,10">
-                <StackPanel Grid.Column="0" Orientation="Horizontal">
-                  <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Subtitle Brightness" />
-                  <NumericUpDown Value="{Binding HdrSettings.SubtitleWhite}" Minimum="80" Maximum="1000" Increment="10" FormatString="0" Width="130" />
-                  <TextBlock Margin="5,0,0,0" Text="nits" />
-                </StackPanel>
-                <TextBlock Grid.Column="1" Classes="help" Margin="40,0,0,0" Text="White of the subtitles in HDR. 200 is comfortable on an OLED; higher is brighter but can dazzle in dark scenes." />
-              </Grid>
-
-              <TextBlock Margin="0,10,0,5" Text="HDR Enhancement" />
-              <Border Classes="border">
-                <StackPanel Margin="10">
-                  <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
-                    <CheckBox Grid.Column="0" IsChecked="{Binding HdrSettings.Enhance}" Content="Enhance HDR Picture" />
-                    <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" TextWrapping="Wrap">Deeper blacks, brighter highlights and richer colors, applied after the conversion. Skin tones are protected. Ctrl+G in the player compares with and without.</TextBlock>
-                  </Grid>
-
-                  <StackPanel IsEnabled="{Binding HdrSettings.EnhancementControlsEnabled}">
-                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
-                      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="5">
-                        <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Look Preset" />
-                        <Button Content="Natural" Command="{Binding HdrSettings.PresetNatural}" />
-                        <Button Content="Vivid" Command="{Binding HdrSettings.PresetVivid}" />
-                        <Button Content="Maximum" Command="{Binding HdrSettings.PresetMaximum}" />
+            <Border Classes="border" Name="DisplaySettingsPanel">
+              <StackPanel Spacing="10">
+                <TextBlock Text="Display" FontWeight="SemiBold" FontSize="16" />
+                <TextBlock Classes="help" Text="These settings describe the display used for playback, independently of the graphics card." />
+                <StackPanel DataContext="{Binding HdrSettings.Display}">
+                  <StackPanel x:DataType="vm:DisplaySettings" Spacing="10">
+                    <WrapPanel IsVisible="{Binding WindowsFeatures}">
+                      <TextBlock Text="Windows HDR" Width="150" VerticalAlignment="Center" />
+                      <ToggleButton IsChecked="{Binding WindowsHdrFollow}" Content="Follow system" />
+                      <ToggleButton IsChecked="{Binding WindowsHdrEnable}" Content="Enable during playback" />
+                    </WrapPanel>
+                    <WrapPanel>
+                      <TextBlock Text="Peak brightness" Width="150" VerticalAlignment="Center" />
+                      <ToggleButton IsChecked="{Binding PeakAutoChoice}" Content="Auto" />
+                      <ToggleButton IsChecked="{Binding PeakManual}" Content="Manual" />
+                      <StackPanel Orientation="Horizontal" IsVisible="{Binding PeakManual}" Spacing="6" Margin="8,0,0,0">
+                        <NumericUpDown Value="{Binding Peak}" Minimum="100" Maximum="10000" Increment="50" FormatString="0" Width="130" />
+                        <TextBlock Text="nits" VerticalAlignment="Center" />
                       </StackPanel>
-                      <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="Fills the values below; adjust them afterwards if you like. In the player, Ctrl+G cycles your values, a natural look, and off." />
-                    </Grid>
-
-                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
-                      <StackPanel Grid.Column="0" Orientation="Horizontal">
-                        <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Black Depth" />
-                        <NumericUpDown Value="{Binding HdrSettings.BlackDepth}" Minimum="0" Maximum="80" Increment="5" FormatString="0" Width="130" />
-                        <TextBlock Margin="5,0,0,0" Text="%" />
-                      </StackPanel>
-                      <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="Darkens the shadows below about 50 nits; black stays black and midtones are untouched. Lower it if dark details disappear." />
-                    </Grid>
-
-                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
-                      <CheckBox Grid.Column="0" IsChecked="{Binding HdrSettings.EnhanceNativeHdr}" Content="Also Enhance Native HDR Videos" />
-                      <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="Off keeps the original grading of videos that are already HDR." />
-                    </Grid>
-
-                    <TextBlock Margin="0,10,0,5" Text="With RTX Video HDR" />
-                    <Border Classes="border" Margin="0,0,0,10">
-                      <StackPanel Margin="10">
-                        <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
-                          <StackPanel Grid.Column="0" Orientation="Horizontal">
-                            <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Highlight Boost" />
-                            <NumericUpDown Value="{Binding HdrSettings.HighlightsRtx}" Minimum="0" Maximum="100" Increment="5" FormatString="0" Width="130" />
-                            <TextBlock Margin="5,0,0,0" Text="%" />
-                          </StackPanel>
-                          <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="Extra brightness for small highlights that stand out from their surroundings (glints, sparks, lights), above half the peak brightness. Large bright areas and skin are left as RTX made them." />
-                        </Grid>
-                        <Grid ColumnDefinitions="Auto,*">
-                          <StackPanel Grid.Column="0" Orientation="Horizontal">
-                            <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Color Vibrance" />
-                            <NumericUpDown Value="{Binding HdrSettings.VibranceRtx}" Minimum="0" Maximum="80" Increment="5" FormatString="0" Width="130" />
-                            <TextBlock Margin="5,0,0,0" Text="%" />
-                          </StackPanel>
-                          <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="Boosts moderately saturated colors without leaving the display gamut. Adds to the Saturation slider of the NVIDIA App." />
-                        </Grid>
-                      </StackPanel>
-                    </Border>
-
-                    <TextBlock Margin="0,10,0,5" Text="With mpv Conversion" />
-                    <Border Classes="border">
-                      <StackPanel Margin="10">
-                        <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
-                          <StackPanel Grid.Column="0" Orientation="Horizontal">
-                            <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="SDR White Level" />
-                            <NumericUpDown Value="{Binding HdrSettings.SdrWhite}" Minimum="80" Maximum="400" Increment="10" FormatString="0" Width="130" />
-                            <TextBlock Margin="5,0,0,0" Text="nits" />
-                          </StackPanel>
-                          <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="Brightness of SDR white in HDR. 203 is the reference; higher makes the whole picture brighter." />
-                        </Grid>
-                        <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
-                          <StackPanel Grid.Column="0" Orientation="Horizontal">
-                            <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Highlight Boost" />
-                            <NumericUpDown Value="{Binding HdrSettings.HighlightsMpv}" Minimum="0" Maximum="100" Increment="5" FormatString="0" Width="130" />
-                            <TextBlock Margin="5,0,0,0" Text="%" />
-                          </StackPanel>
-                          <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="At 100 %, small isolated whites reach the display peak; large white areas rise by 50 % at most to stay comfortable." />
-                        </Grid>
-                        <Grid ColumnDefinitions="Auto,*">
-                          <StackPanel Grid.Column="0" Orientation="Horizontal">
-                            <TextBlock Margin="0,0,5,0" VerticalAlignment="Center" Text="Color Vibrance" />
-                            <NumericUpDown Value="{Binding HdrSettings.VibranceMpv}" Minimum="0" Maximum="80" Increment="5" FormatString="0" Width="130" />
-                            <TextBlock Margin="5,0,0,0" Text="%" />
-                          </StackPanel>
-                          <TextBlock Grid.Column="1" Classes="help" Margin="20,0,0,0" Text="Boosts moderately saturated colors without leaving the display gamut. Skin tones and already vivid colors are spared." />
-                        </Grid>
-                      </StackPanel>
-                    </Border>
+                    </WrapPanel>
+                    <WrapPanel>
+                      <TextBlock Text="Color gamut" Width="150" VerticalAlignment="Center" />
+                      <ToggleButton IsChecked="{Binding GamutAuto}" Content="Auto" />
+                      <ToggleButton IsChecked="{Binding GamutP3}" Content="Display P3" />
+                      <ToggleButton IsChecked="{Binding GamutBt2020}" Content="BT.2020" />
+                    </WrapPanel>
+                    <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding Oled}" Content="This display is OLED" ToolTip.Tip="Enable only for a confirmed OLED display. The graphics card does not identify the panel technology." />
                   </StackPanel>
                 </StackPanel>
-              </Border>
-
-              <TextBlock Margin="0,20,0,0" Classes="help" TextWrapping="Wrap">Displays: the same install can be shared between PCs. The player uses the NVIDIA settings on an NVIDIA GPU and the AMD / Intel settings otherwise.</TextBlock>
-
-              <Grid ColumnDefinitions="*,*" Margin="0,5,0,0">
-                <StackPanel Grid.Column="0" Margin="0,0,5,0" DataContext="{Binding HdrSettings.Nvidia}">
-                  <StackPanel x:DataType="vm:DisplaySettings">
-                  <StackPanel Orientation="Horizontal" Margin="0,10,0,5">
-                    <TextBlock Text="Display on NVIDIA PC" />
-                    <TextBlock Margin="8,0,0,0" Text="(this PC)" Foreground="{DynamicResource SystemAccentColor}" IsVisible="{Binding IsThisPc}" />
-                  </StackPanel>
-                  <Border Classes="border">
-                    <StackPanel Margin="10" Spacing="10">
-                      <StackPanel Orientation="Horizontal">
-                        <TextBlock Margin="0,0,5,0" Width="120" Text="Windows HDR" />
-                        <ToggleButton IsChecked="{Binding WindowsHdrEnable}" Content="Turn On Automatically" />
-                        <ToggleButton IsChecked="{Binding WindowsHdrFollow}" Content="Follow Windows" />
-                      </StackPanel>
-                      <StackPanel Orientation="Horizontal">
-                        <TextBlock Margin="0,0,5,0" Width="120" Text="Peak Brightness" />
-                        <ToggleButton IsChecked="{Binding PeakAutoChoice}" Content="Auto" />
-                        <ToggleButton IsChecked="{Binding PeakManual}" Content="Manual" />
-                        <NumericUpDown Margin="5,0,0,0" Value="{Binding Peak}" Minimum="100" Maximum="10000" Increment="50" FormatString="0" Width="130" IsEnabled="{Binding PeakManual}" />
-                        <TextBlock Margin="5,0,0,0" Text="nits" />
-                      </StackPanel>
-                      <StackPanel Orientation="Horizontal">
-                        <TextBlock Margin="0,0,5,0" Width="120" Text="Color Gamut" />
-                        <ToggleButton IsChecked="{Binding GamutAuto}" Content="Auto" />
-                        <ToggleButton IsChecked="{Binding GamutP3}" Content="Display P3" />
-                        <ToggleButton IsChecked="{Binding GamutBt2020}" Content="BT.2020" />
-                      </StackPanel>
-                      <CheckBox IsChecked="{Binding Oled}" Content="OLED Display (perfect blacks)" />
-                    </StackPanel>
-                  </Border>
-                  </StackPanel>
+                <StackPanel IsVisible="{Binding LinuxFeatures}" Spacing="8">
+                  <WrapPanel>
+                    <TextBlock Text="Wayland output" Width="150" VerticalAlignment="Center" />
+                    <ToggleButton IsChecked="{Binding HdrSettings.LinuxAuto}" Content="Follow system" />
+                    <ToggleButton IsChecked="{Binding HdrSettings.LinuxSdr}" Content="SDR" />
+                    <ToggleButton IsChecked="{Binding HdrSettings.LinuxPq}" Content="HDR PQ" />
+                  </WrapPanel>
+                  <TextBlock Classes="help" Text="Auto follows the compositor. Enable HDR in GNOME on a compatible display; grading requires negotiated PQ output. Ctrl+Alt+H shows the output diagnosis." />
                 </StackPanel>
+                <TextBlock Classes="help" Text="Auto uses display information available to the player. Choose Manual only with a measured or calibrated peak. Ctrl+Alt+P opens the HDR calibration pattern." />
+              </StackPanel>
+            </Border>
 
-                <StackPanel Grid.Column="1" Margin="5,0,0,0" DataContext="{Binding HdrSettings.Amd}">
-                  <StackPanel x:DataType="vm:DisplaySettings">
-                  <StackPanel Orientation="Horizontal" Margin="0,10,0,5">
-                    <TextBlock Text="Display on AMD / Intel PC" />
-                    <TextBlock Margin="8,0,0,0" Text="(this PC)" Foreground="{DynamicResource SystemAccentColor}" IsVisible="{Binding IsThisPc}" />
+            <Border Classes="border">
+              <StackPanel Spacing="10">
+                <TextBlock Text="HDR picture" FontWeight="SemiBold" FontSize="16" />
+                <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.HdrConversion}" Content="Convert SDR to HDR when HDR output is active" />
+                <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.Enhance}" Content="Enable HDR grading" />
+                <WrapPanel>
+                  <TextBlock Text="Appearance" Width="150" VerticalAlignment="Center" />
+                  <Button Content="Natural" Command="{Binding HdrSettings.PresetNatural}" />
+                  <Button Content="Vivid" Command="{Binding HdrSettings.PresetVivid}" />
+                  <Button Content="Maximum" Command="{Binding HdrSettings.PresetMaximum}" />
+                </WrapPanel>
+                <TextBlock Classes="help" Text="New installs use Natural. SDR stays SDR while system HDR is off. Ctrl+G compares the configured grade, Natural and grading off." />
+                <Expander Header="Adjust HDR appearance" Name="HdrAppearanceExpander" IsExpanded="False" HorizontalAlignment="Stretch">
+                  <StackPanel Spacing="12" Margin="0,12,0,0">
+                    <WrapPanel>
+                      <TextBlock Text="Conversion engine" Width="180" VerticalAlignment="Center" />
+                      <ToggleButton IsChecked="{Binding HdrSettings.BackendAuto}" Content="Auto" />
+                      <ToggleButton IsChecked="{Binding HdrSettings.BackendRtx}" Content="RTX Video HDR" IsEnabled="{Binding RtxHdrSelectable}" />
+                      <ToggleButton IsChecked="{Binding HdrSettings.BackendMpv}" Content="mpv" />
+                    </WrapPanel>
+                    <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.EnhanceNativeHdr}" Content="Also grade native HDR videos" />
+                    <WrapPanel>
+                      <TextBlock Text="Subtitle white" Width="180" VerticalAlignment="Center" />
+                      <NumericUpDown Value="{Binding HdrSettings.SubtitleWhite}" Minimum="80" Maximum="1000" Increment="10" FormatString="0" Width="120" />
+                      <TextBlock Text="nits" Margin="6,0" VerticalAlignment="Center" />
+                    </WrapPanel>
+                    <WrapPanel IsEnabled="{Binding HdrSettings.EnhancementControlsEnabled}">
+                      <TextBlock Text="Black depth" Width="180" VerticalAlignment="Center" />
+                      <NumericUpDown Value="{Binding HdrSettings.BlackDepth}" Minimum="0" Maximum="80" Increment="5" FormatString="0" Width="120" />
+                      <TextBlock Text="%" Margin="6,0" VerticalAlignment="Center" />
+                    </WrapPanel>
+                    <WrapPanel IsEnabled="{Binding HdrSettings.EnhancementControlsEnabled}">
+                      <TextBlock Text="mpv SDR white" Width="180" VerticalAlignment="Center" />
+                      <NumericUpDown Value="{Binding HdrSettings.SdrWhite}" Minimum="80" Maximum="400" Increment="10" FormatString="0" Width="120" />
+                      <TextBlock Text="nits" Margin="6,0" VerticalAlignment="Center" />
+                    </WrapPanel>
+                    <WrapPanel IsEnabled="{Binding HdrSettings.EnhancementControlsEnabled}">
+                      <TextBlock Text="mpv highlights / vibrance" Width="180" VerticalAlignment="Center" />
+                      <NumericUpDown Value="{Binding HdrSettings.HighlightsMpv}" Minimum="0" Maximum="100" Increment="5" FormatString="0" Width="120" />
+                      <NumericUpDown Value="{Binding HdrSettings.VibranceMpv}" Minimum="0" Maximum="80" Increment="5" FormatString="0" Width="120" Margin="8,0" />
+                      <TextBlock Text="%" VerticalAlignment="Center" />
+                    </WrapPanel>
+                    <WrapPanel IsEnabled="{Binding RtxHdrSelectable}">
+                      <TextBlock Text="RTX highlights / vibrance" Width="180" VerticalAlignment="Center" />
+                      <NumericUpDown Value="{Binding HdrSettings.HighlightsRtx}" Minimum="0" Maximum="100" Increment="5" FormatString="0" Width="120" />
+                      <NumericUpDown Value="{Binding HdrSettings.VibranceRtx}" Minimum="0" Maximum="80" Increment="5" FormatString="0" Width="120" Margin="8,0" />
+                      <TextBlock Text="%" VerticalAlignment="Center" />
+                    </WrapPanel>
+                    <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.MpvTrueHdrLook}" Content="Use the TrueHDR look with mpv conversion" />
+                    <WrapPanel IsEnabled="{Binding HdrSettings.MpvTrueHdrLook}">
+                      <TextBlock Text="mpv contrast / saturation" Width="180" VerticalAlignment="Center" />
+                      <NumericUpDown Value="{Binding HdrSettings.MpvContrast}" Minimum="100" Maximum="200" Increment="10" FormatString="0" Width="120" />
+                      <NumericUpDown Value="{Binding HdrSettings.MpvSaturation}" Minimum="100" Maximum="200" Increment="10" FormatString="0" Width="120" Margin="8,0" />
+                    </WrapPanel>
                   </StackPanel>
-                  <Border Classes="border">
-                    <StackPanel Margin="10" Spacing="10">
-                      <StackPanel Orientation="Horizontal">
-                        <TextBlock Margin="0,0,5,0" Width="120" Text="Windows HDR" />
-                        <ToggleButton IsChecked="{Binding WindowsHdrEnable}" Content="Turn On Automatically" />
-                        <ToggleButton IsChecked="{Binding WindowsHdrFollow}" Content="Follow Windows" />
-                      </StackPanel>
-                      <StackPanel Orientation="Horizontal">
-                        <TextBlock Margin="0,0,5,0" Width="120" Text="Peak Brightness" />
-                        <ToggleButton IsChecked="{Binding PeakAutoChoice}" Content="Auto" />
-                        <ToggleButton IsChecked="{Binding PeakManual}" Content="Manual" />
-                        <NumericUpDown Margin="5,0,0,0" Value="{Binding Peak}" Minimum="100" Maximum="10000" Increment="50" FormatString="0" Width="130" IsEnabled="{Binding PeakManual}" />
-                        <TextBlock Margin="5,0,0,0" Text="nits" />
-                      </StackPanel>
-                      <StackPanel Orientation="Horizontal">
-                        <TextBlock Margin="0,0,5,0" Width="120" Text="Color Gamut" />
-                        <ToggleButton IsChecked="{Binding GamutAuto}" Content="Auto" />
-                        <ToggleButton IsChecked="{Binding GamutP3}" Content="Display P3" />
-                        <ToggleButton IsChecked="{Binding GamutBt2020}" Content="BT.2020" />
-                      </StackPanel>
-                      <CheckBox IsChecked="{Binding Oled}" Content="OLED Display (perfect blacks)" />
-                    </StackPanel>
-                  </Border>
-                  </StackPanel>
+                </Expander>
+              </StackPanel>
+            </Border>
+
+            <Expander Header="Playback and rendering" Name="PlaybackSettingsExpander" IsExpanded="False" HorizontalAlignment="Stretch">
+              <StackPanel Spacing="12" Margin="10,12">
+                <WrapPanel>
+                  <TextBlock Text="Final scaling" Width="150" VerticalAlignment="Center" />
+                  <ToggleButton IsChecked="{Binding HdrSettings.UpscaleAuto}" Content="Auto" />
+                  <ToggleButton IsChecked="{Binding HdrSettings.UpscaleClassic}" Content="Standard" />
+                  <ToggleButton IsChecked="{Binding HdrSettings.UpscaleOff}" Content="Off" />
+                  <ToggleButton IsChecked="{Binding HdrSettings.UpscaleNvidia}" Content="RTX VSR" IsVisible="{Binding WindowsFeatures}" IsEnabled="{Binding RtxHdrSelectable}" />
+                  <ToggleButton IsChecked="{Binding HdrSettings.UpscaleAmd}" Content="AMD VideoSR" IsVisible="{Binding WindowsFeatures}" IsEnabled="{Binding AmfSelectable}" />
+                </WrapPanel>
+                <WrapPanel IsVisible="{Binding WindowsFeatures}">
+                  <TextBlock Text="Target resolution" Width="150" VerticalAlignment="Center" />
+                  <ui:FAComboBox IsEditable="True" Width="160" Text="{Binding HdrSettings.TargetResolution, Mode=TwoWay}" ItemsSource="{Binding HdrTargetResolutions}" />
+                </WrapPanel>
+                <WrapPanel>
+                  <TextBlock Text="Renderer" Width="150" VerticalAlignment="Center" />
+                  <ToggleButton IsChecked="{Binding HdrSettings.RenderApiD3D11}" Content="Direct3D 11" IsVisible="{Binding WindowsFeatures}" />
+                  <ToggleButton IsChecked="{Binding HdrSettings.RenderApiVulkan}" Content="Vulkan" />
+                </WrapPanel>
+                <StackPanel IsVisible="{Binding WindowsFeatures}" Spacing="10">
+                  <WrapPanel>
+                    <TextBlock Text="Extra interpolation" Width="150" VerticalAlignment="Center" />
+                    <ToggleButton IsChecked="{Binding HdrSettings.FrameGenerationOff}" Content="Off" />
+                    <ToggleButton IsChecked="{Binding HdrSettings.FrameGenerationAmf}" Content="AMD AMF ×2" IsEnabled="{Binding AmfSelectable}" />
+                  </WrapPanel>
+                  <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.AutoDisplayRefresh}" Content="Automatically change display refresh rate (experimental)" />
                 </StackPanel>
-              </Grid>
+                <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.RifeDisplaySync}" Content="Match enabled RIFE profiles to display refresh" />
+                <WrapPanel IsVisible="{Binding HdrSettings.RifeDisplaySync}">
+                  <TextBlock Text="Maximum RIFE factor" Width="150" VerticalAlignment="Center" />
+                  <NumericUpDown Value="{Binding HdrSettings.RifeMaxFactor}" Minimum="1" Maximum="8" Increment="1" FormatString="0" Width="120" />
+                </WrapPanel>
+                <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.GpuSubtitles}" Content="Render subtitles on GPU (experimental)" IsVisible="{Binding WindowsFeatures}" />
+                <TextBlock Classes="help" Text="Renderer and experimental playback changes require restarting the player. Frame generation stays off until explicitly enabled." />
+                <Expander Header="RTX Video controls" IsVisible="{Binding WindowsFeatures}" IsEnabled="{Binding RtxHdrSelectable}" IsExpanded="False">
+                  <StackPanel Spacing="10" Margin="0,10">
+                    <WrapPanel>
+                      <TextBlock Text="VSR quality" Width="150" VerticalAlignment="Center" />
+                      <NumericUpDown Value="{Binding HdrSettings.RtxVsrQuality}" Minimum="1" Maximum="4" Increment="1" FormatString="0" Width="110" />
+                    </WrapPanel>
+                    <WrapPanel>
+                      <TextBlock Text="Contrast / saturation" Width="150" VerticalAlignment="Center" />
+                      <NumericUpDown Value="{Binding HdrSettings.RtxContrast}" Minimum="0" Maximum="200" Increment="10" FormatString="0" Width="110" />
+                      <NumericUpDown Value="{Binding HdrSettings.RtxSaturation}" Minimum="0" Maximum="200" Increment="10" FormatString="0" Width="110" Margin="8,0" />
+                    </WrapPanel>
+                    <WrapPanel>
+                      <TextBlock Text="Middle gray" Width="150" VerticalAlignment="Center" />
+                      <NumericUpDown Value="{Binding HdrSettings.RtxMiddleGray}" Minimum="10" Maximum="100" Increment="5" FormatString="0" Width="110" />
+                    </WrapPanel>
+                    <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.SkipHeldFrames}" Content="Reuse identical held frames" />
+                    <TextBlock Classes="help" Text="These RTX controls apply to the NVIDIA engine with Vulkan rendering. Other output paths use the NVIDIA App settings." />
+                  </StackPanel>
+                </Expander>
+              </StackPanel>
+            </Expander>
 
-              <TextBlock Margin="0,10,0,0" Classes="help" TextWrapping="Wrap" xml:space="preserve"><Bold>Turn On Automatically</Bold>: the player switches Windows HDR on for playback and restores it afterwards. <Bold>Follow Windows</Bold>: HDR is used only when it is already on in Windows. <Bold>Peak Brightness</Bold>: also run the Windows HDR Calibration app with the same value.</TextBlock>
-            </StackPanel>
+            <Expander Header="TensorRT engine settings" Name="EngineSettingsExpander" IsVisible="{Binding AnimeJaNaiConf.TensorRtSelected}" IsExpanded="False" HorizontalAlignment="Stretch">
+              <StackPanel Spacing="12" Margin="10,12">
+                <WrapPanel>
+                  <TextBlock Text="Input shape" Width="150" VerticalAlignment="Center" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TrtStaticOnnxSelected}" Content="From ONNX" Command="{Binding AnimeJaNaiConf.SetTrtStaticOnnx}" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TrtStaticSelected}" Content="Static" Command="{Binding AnimeJaNaiConf.SetTrtStatic}" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TrtDynamicSelected}" Content="Dynamic" Command="{Binding AnimeJaNaiConf.SetTrtDynamic}" />
+                </WrapPanel>
+                <WrapPanel IsVisible="{Binding AnimeJaNaiConf.TrtDynamicSelected}">
+                  <TextBlock Text="Minimum / optimal / maximum" Margin="0,0,12,0" VerticalAlignment="Center" />
+                  <TextBox Text="{Binding AnimeJaNaiConf.TrtDynamicMinResolution}" Width="120" />
+                  <TextBox Text="{Binding AnimeJaNaiConf.TrtDynamicOptResolution}" Width="120" Margin="8,0" />
+                  <TextBox Text="{Binding AnimeJaNaiConf.TrtDynamicMaxResolution}" Width="120" />
+                </WrapPanel>
+                <WrapPanel>
+                  <TextBlock Text="Optimization level" Width="150" VerticalAlignment="Center" />
+                  <TextBox Text="{Binding AnimeJaNaiConf.TrtBuilderOptimizationLevel}" Width="100" />
+                </WrapPanel>
+                <TextBlock Classes="help" Text="Static builds for the video resolution. Dynamic covers a resolution range. These settings affect new engines; existing cached engines are kept." />
+                <TextBlock Text="Additional engine arguments" />
+                <TextBox Text="{Binding AnimeJaNaiConf.TrtEngineSettings}" TextWrapping="Wrap" AcceptsReturn="True" />
+              </StackPanel>
+            </Expander>
 
-            <TextBlock Margin="10,0,0,10" Classes="help" TextWrapping="Wrap">Display upscaling, HDR and frame generation changes apply to the running player at once; the RIFE factor from the next video. Ctrl+Alt+P in the player shows a calibration pattern for the peak, black and paper white values.</TextBlock>
-
+            <Expander Header="Diagnostics" Name="DiagnosticsExpander" IsExpanded="False" HorizontalAlignment="Stretch">
+              <StackPanel Margin="10,12" Spacing="10">
+                <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.EnableLogging}" Content="Enable inference logging" />
+                <TextBlock Classes="help" Text="Logging is off on new installs. Ctrl+Alt+H in the player provides a display and HDR diagnosis." />
+              </StackPanel>
+            </Expander>
           </StackPanel>
           <StackPanel Orientation="Horizontal" Grid.Row="0" HorizontalAlignment="Right" VerticalAlignment="Top">
             <Button Margin="10,0,10,0" Click="ImportFullConfButtonClick">
               <StackPanel Orientation="Horizontal">
                 <materialIcons:MaterialIcon Kind="Import" VerticalAlignment="Center" />
-                <TextBlock Margin="10,0,10,0" VerticalAlignment="Center">Import Full Config From File</TextBlock>
+                <TextBlock Margin="10,0,10,0" VerticalAlignment="Center">Import config</TextBlock>
               </StackPanel>
             </Button>
             <Button Margin="10,0,10,0" Click="ExportFullConfButtonClick">
               <StackPanel Orientation="Horizontal">
                 <materialIcons:MaterialIcon Kind="Export" VerticalAlignment="Center" />
-                <TextBlock Margin="10,0,10,0" VerticalAlignment="Center">Export Full Config To File</TextBlock>
+                <TextBlock Margin="10,0,10,0" VerticalAlignment="Center">Export config</TextBlock>
               </StackPanel>
             </Button>
           </StackPanel>

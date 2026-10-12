@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AnimeJaNaiConfEditor is a Windows desktop GUI for configuring AnimeJaNai, an AI-powered anime video upscaling tool. It manages upscaling profiles, processing chains, and AI model settings that get written to an INI-style config file consumed by mpv/AnimeJaNai.
+AnimeJaNaiConfEditor is a Windows/Linux desktop GUI for configuring AnimeJaNai, an AI-powered anime video upscaling tool. It manages upscaling profiles, processing chains, and AI model settings that get written to an INI-style config file consumed by mpv/AnimeJaNai.
 
 ## Build Commands
 
@@ -14,7 +14,9 @@ dotnet build -c Release          # Release build
 dotnet publish -c Release        # Publish self-contained win-x64 executable
 ```
 
-No test suite or linter is configured.
+Regression checks: `dotnet run --project tests/ProfileRoundTrip` for persistence/migration/IPC;
+`dotnet run --project tests/SettingsUi -p:RuntimeIdentifier=linux-x64 -- artifacts/settings.png`
+for Avalonia headless keyboard/binding/layout checks (use win-x64 on Windows).
 
 ## Architecture
 
@@ -39,46 +41,38 @@ No test suite or linter is configured.
 - Backup system auto-creates up to 10 backups in `./backups/`, deduplicating by content
 - Pre-packaged ONNX neural network models live in `./onnx/`
 
-## Repo and directory naming
+## Repository and release workflow
 
-The GitHub repo is **`the-database/AnimeJaNaiManager`**, but the working copy on this machine
-is the older `AnimeJaNaiConfEditor` directory, and the csproj/solution keep the old name too.
-Only `<AssemblyName>AnimeJaNaiManager</AssemblyName>` reflects the rename, so the built binary
-is `AnimeJaNaiManager.exe`. Do not rename paths to "fix" this.
+The active fork is `Ta2b/AnimeJaNaiManager-HDR`, branch `hdr-settings-0.8`.
+The project path remains `AnimeJaNaiConfEditor`; the runtime assembly name is
+`AnimeJaNaiManager`. Do not rename these project paths.
 
-The active branch here is `subs/gpu-toggle`, not `main`.
+`.github/workflows/build-hdr.yml` is the only Manager release workflow. It runs
+on pushes to the active HDR branch and manual dispatch; pull requests run checks
+and builds without publication. The Windows/Linux matrix tests persistence and
+the real Avalonia view, then publishes self-contained runtimes. A single publish
+job uploads both platforms together to `hdr-<commit SHA>` and the compatible
+rolling tag `latest-hdr-settings-0.8`. Existing assets are not removed.
 
-## Releasing
+`player-source-ref.txt` pins the shared `AnimeJaNaiPlatform/PlatformServices.cs`
+source from the companion player. The player uses `manager-source-ref.txt` to
+pin this Manager build. Both pins are exact commit SHAs, not rolling branches.
 
-`.github/workflows/release.yml`, two independent legs:
+Runtime packages contain the executable and native Skia/HarfBuzz libraries;
+`animejanai.conf`, `onnx/` and PDBs are excluded. Releases are published
+prereleases, so the assembler can download their assets without authentication.
+The obsolete upstream `release.yml` has been removed. Publication order is
+in the companion player's `docs/RELEASE.md`.
 
-```bash
-gh workflow run Release -R the-database/AnimeJaNaiManager -f release_version=0.5.0
-```
+`setup-dotnet` uses `10.x`, matching the `net10.0` projects.
 
-- **Windows leg** — gated on `if: github.event_name == 'workflow_dispatch'`, so it runs **only**
-  on a manual dispatch. Publishes self-contained single-file `win-x64`, stages only the exe plus
-  the native Avalonia DLLs, and uploads `AnimeJaNaiManager-portable-x64.zip`.
-- **Linux leg** — runs on dispatch *and* on a push to `linux-support` touching
-  `AnimeJaNaiConfEditor/**` or the workflow. Publishes `linux-x64` and uploads
-  `AnimeJaNaiManager-portable-linux-x64.tar.zst`.
+## Shared display settings
 
-Both stage **only** the binary and its native libs. `animejanai.conf`, `onnx/`, and `*.pdb` are
-deliberately excluded: those are owned by the `mpv-upscale-2x_animejanai` overlay and must not
-ship in this artifact. `dotnet publish` is invoked directly rather than through
-`FolderProfile.pubxml`, which sets `SelfContained=false`.
-
-> **The release must stay published, not draft.** The workflow sets `draft: false` with the
-> comment: "Published (not draft) so the mpv build can fetch the asset over the public
-> `releases/download/<tag>/` URL - draft assets 404 for unauthenticated requests." The
-> AnimeJaNai assembler downloads this asset unauthenticated in `InstallAnimeJaNaiManager()`, so
-> a draft release silently breaks the package build.
-
-`env.DEFAULT_TAG` (currently `0.4.0`) is the fallback tag for push-triggered runs; always pass
-`release_version` on a real release.
-
-After publishing, bump **`ManagerVersion`** in `BuildMpvUpscale2xAnimeJaNai/Program.cs` in
-`the-database/mpv-AnimeJaNai` — that constant is what pulls this build into the package. The
-release runbook for the whole project is that repo's `docs/RELEASE.md`.
-
-`setup-dotnet` pins `dotnet-version: '10.x'`, which must match `<TargetFramework>net10.0</TargetFramework>`.
+Global Settings contains one Display section, independent of the GPU.
+`HdrSettings.Display` writes `windows_hdr`, `display_peak`, `display_gamut`
+and `display_oled`; old per-vendor keys are migration fallbacks only and
+remain in the file. Delayed GPU detection must not overwrite user edits.
+New display defaults are Auto/Auto/OLED off, system HDR followed; HDR
+conversion and Natural grading are enabled on confirmed HDR output.
+The companion player ships Performance without RIFE as its startup choice.
+Advanced settings stay accessible in collapsed expanders.

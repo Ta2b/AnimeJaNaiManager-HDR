@@ -4,6 +4,13 @@ using ReactiveUI.Builder;
 try
 {
     RxAppBuilder.CreateReactiveUIBuilder().WithCoreServices().BuildApp();
+    if (args.Length == 3 && args[0] == "--save-hdr")
+    {
+        var live = new HdrSettings(args[1]);
+        live.LinuxOutput = args[2]; live.MpvContrast = 130; live.Save();
+        if (live.SaveNotice.Length > 0) throw new Exception(live.SaveNotice);
+        return 0;
+    }
     string data = Path.Combine(AppContext.BaseDirectory, "fixtures", Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(Path.Combine(data, "onnx"));
     Environment.SetEnvironmentVariable("ANIMEJANAI_DATA_DIR", data);
@@ -36,6 +43,103 @@ try
         if (vm.CurrentSlot.Chains[0].RifeEnsemble != ensemble)
             throw new Exception($"Profile import lost RIFE ensemble={ensemble}");
         Console.WriteLine($"PASS ensemble={ensemble}");
+    }
+    var hdrPath = Path.Combine(data, "hdr.conf");
+    File.WriteAllText(hdrPath, "# retained comment\nunknown_option=custom\nlinux_hdr_output=sdr # output choice\n");
+    var hdr = new HdrSettings(hdrPath);
+    hdr.LinuxOutput = "pq"; hdr.Save();
+    var saved = File.ReadAllText(hdrPath);
+    if (!saved.Contains("# retained comment") || !saved.Contains("unknown_option=custom") || !saved.Contains("linux_hdr_output=pq # output choice"))
+        throw new Exception("HDR save lost comments/options or PQ selection");
+    if (new HdrSettings(hdrPath).LinuxOutput != "pq") throw new Exception("HDR reload lost PQ selection");
+    Console.WriteLine("PASS HDR comments, unknown options, SDR/PQ save and reload");
+    string defaultsPath = Path.Combine(data, "defaults.conf");
+    var defaults = new HdrSettings(defaultsPath);
+    if (!defaults.Display.PeakAuto || defaults.Display.Peak is not null || defaults.Display.Oled ||
+        defaults.Display.Gamut != "auto" || defaults.Display.WindowsHdr != "follow" || !defaults.LinuxAuto ||
+        !defaults.HdrConversion || !defaults.Enhance || defaults.FrameGeneration != "off" ||
+        defaults.RifeDisplaySync || defaults.EnhanceNativeHdr || defaults.BlackDepth != 15 || defaults.VibranceMpv != 15)
+        throw new Exception("New-install settings are not shared, automatic and Natural");
+    defaults.Save();
+    string newConf = File.ReadAllText(defaultsPath);
+    if (!newConf.Contains("display_peak=auto") || !newConf.Contains("display_oled=no") ||
+        newConf.Contains("peak_nvidia=") || newConf.Contains("peak_amd="))
+        throw new Exception("New settings wrote per-GPU display descriptions");
+    Console.WriteLine("PASS new-install display defaults, auto HDR and active Natural grade");
+    string legacyPath = Path.Combine(data, "legacy-display.conf");
+    const string legacy = "# personal screen\npeak_nvidia=1000 # calibrated\noled_nvidia=yes\ngamut_nvidia=display-p3\nmode=follow\n" +
+        "peak_amd=650\noled_amd=no\ngamut_amd=bt.2020\namd_mode=enable\nunknown=keep\n";
+    File.WriteAllText(legacyPath, legacy);
+    var migrated = new HdrSettings(legacyPath, "amd");
+    if (migrated.Display.Peak != 650 || migrated.Display.PeakAuto || migrated.Display.Oled ||
+        migrated.Display.Gamut != "bt.2020" || migrated.Display.WindowsHdr != "enable")
+        throw new Exception("Legacy migration did not preserve the active bank's display");
+    migrated.Save();
+    string migratedText = File.ReadAllText(legacyPath);
+    if (!migratedText.Contains(legacy) || !migratedText.Contains("display_peak=650"))
+        throw new Exception("Migration lost legacy screen values or comments");
+    var independent = new HdrSettings(legacyPath, "nvidia");
+    if (independent.Display.Peak != 650 || independent.Display.Gamut != "bt.2020")
+        throw new Exception("New common display changed with the GPU");
+    Console.WriteLine("PASS legacy active display migration and GPU-independent round trip");
+    independent.Display.Oled = true; independent.Display.PeakAuto = true; independent.Save();
+    independent.Display.Oled = false; independent.Save();
+    var reset = new HdrSettings(legacyPath, "nvidia");
+    if (reset.Display.Oled || !reset.Display.PeakAuto || reset.Display.Peak is not null)
+        throw new Exception("Explicit common OLED=false or Auto was overridden by legacy values");
+    Console.WriteLine("PASS explicit OLED off and automatic peak override legacy manual values");
+    File.WriteAllText(legacyPath, legacy);
+    var pendingDisplay = new HdrSettings(legacyPath, "nvidia");
+    pendingDisplay.Display.Peak = 800;
+    pendingDisplay.SelectLegacyDisplay("amd");
+    if (pendingDisplay.Display.Peak != 800)
+        throw new Exception("Delayed GPU detection overwrote an edited display");
+    Console.WriteLine("PASS delayed legacy detection preserves user display edits");
+    var merged = IniPreservingSave.Merge("# comment\n[global]\nbackend=TensorRT # choice\nunknown=keep\ndisplay_rate_match=yes\n", "[global]\nbackend=TensorRT\n");
+    if (!merged.Contains("# comment") || !merged.Contains("# choice") || !merged.Contains("unknown=keep") || merged.Contains("display_rate_match"))
+        throw new Exception("INI merge lost comments/unknown keys or retained removed managed option");
+    Console.WriteLine("PASS INI preserves comments and removes optional managed keys");
+    if (OperatingSystem.IsLinux())
+    {
+        vm.AnimeJaNaiConf.UserSelectDirectMl();
+        if (vm.AnimeJaNaiConf.DirectMlSelected || vm.RtxHdrSelectable || vm.AmfSelectable)
+            throw new Exception("Linux offered a Windows-only backend");
+        Console.WriteLine("PASS Linux refuses DirectML, RTX Video and AMF");
+        Directory.CreateDirectory(Path.Combine(data, "inference"));
+        File.WriteAllText(Path.Combine(data, "inference", "libaji_vulkan.so"), "fixture");
+        Directory.CreateDirectory(Path.Combine(data, "rife-vulkan", "rife-v4.6"));
+        foreach (string file in new[] { "flownet.param", "flownet.bin" })
+            File.WriteAllText(Path.Combine(data, "rife-vulkan", "rife-v4.6", file), "fixture");
+        foreach (string file in new[] { "spatial.onnx", "spatial.ncnn.param", "spatial.ncnn.bin", "unsupported.onnx" })
+            File.WriteAllText(Path.Combine(data, "onnx", file), "fixture");
+        vm.AnimeJaNaiConf.UserSelectVulkan();
+        if (!vm.VulkanSelectable || vm.RifeMissing || vm.AnimeJaNaiConf.TensorRtSelected || vm.AnimeJaNaiConf.DirectMlSelected)
+            throw new Exception("Vulkan selection does not expose its own installed components");
+        if (vm.GetAllModels().Count != 1 || vm.GetAllModels()[0] != "spatial" || MainWindowViewModel.RifeModels.Count != 1)
+            throw new Exception("Vulkan offered a model that was not converted");
+        vm.CurrentSlot.Chains[0].RifeModel = MainWindowViewModel.RifeValueToLabel("46");
+        string vulkan = Path.Combine(data, "vulkan.conf");
+        vm.WriteAnimeJaNaiConf(vulkan);
+        var reloaded = vm.ReadAnimeJaNaiConf(vulkan);
+        if (!reloaded.VulkanSelected || reloaded.SelectedBackend != Backend.Vulkan || reloaded.UpscaleSlots[0].Chains[0].RifeModel != MainWindowViewModel.RifeValueToLabel("46"))
+            throw new Exception("Vulkan backend or RIFE 4.6 lost at round trip");
+        Console.WriteLine("PASS Vulkan selection, converted-model filtering and RIFE 4.6 round trip");
+        string socketPath = Path.Combine(Path.GetTempPath(), "ajn-ipc-" + Guid.NewGuid().ToString("N"));
+        using var listener = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.Unix,
+            System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Unspecified);
+        listener.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(socketPath)); listener.Listen(1);
+        Environment.SetEnvironmentVariable("ANIMEJANAI_IPC_PATH", socketPath);
+        try
+        {
+            HdrSettings.NotifyPlayer();
+            using var connection = listener.Accept(); connection.ReceiveTimeout = 1000;
+            var buffer = new byte[512]; int count = connection.Receive(buffer);
+            var line = System.Text.Encoding.UTF8.GetString(buffer, 0, count);
+            if (line != "{\"command\":[\"script-message\",\"animejanai-reload-options\"]}\n")
+                throw new Exception("Incorrect Unix socket command");
+            Console.WriteLine("PASS Unix socket sends the existing reload message");
+        }
+        finally { Environment.SetEnvironmentVariable("ANIMEJANAI_IPC_PATH", null); File.Delete(socketPath); }
     }
     return 0;
 }

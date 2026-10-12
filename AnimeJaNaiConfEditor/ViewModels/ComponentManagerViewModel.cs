@@ -47,7 +47,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
 
         public string Description => Name switch
         {
-            "trt-runtime" => "The fastest upscaling engine, for NVIDIA GPUs. Without it, NVIDIA users fall back to the slower DirectML engine.",
+            "trt-runtime" => OperatingSystem.IsLinux() ? "Inference for NVIDIA GPUs. Without TensorRT, Linux keeps normal mpv playback." : "The fastest upscaling engine, for NVIDIA GPUs. Without it, NVIDIA users fall back to the slower DirectML engine.",
             "rife" => "Frame interpolation (e.g. 24 → 48 fps). Not needed if you only upscale.",
             "trt-ptx" => "Fallback kernels for NVIDIA GPUs without a dedicated kernel pack. First engine build is slower.",
             _ when Name.StartsWith("trt-sm") => "Engine-builder kernels matched to this GPU generation. Only needed on these GPUs.",
@@ -70,7 +70,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
     public class ComponentManagerViewModel : ViewModelBase
     {
         public static string UpdaterPath { get; } =
-            Path.Combine(MainWindowViewModel.RootDir, "AnimeJaNaiUpdater.exe");
+            Path.Combine(MainWindowViewModel.RootDir, OperatingSystem.IsWindows() ? "AnimeJaNaiUpdater.exe" : "AnimeJaNaiUpdater");
 
         public bool UpdaterFound => File.Exists(UpdaterPath);
 
@@ -155,7 +155,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 bool nvidia = gpu.GetProperty("nvidia").GetBoolean();
                 GpuText = nvidia
                     ? $"GPU: {gpu.GetProperty("name").GetString()}"
-                    : "GPU: no NVIDIA device detected — the built-in DirectML engine covers AMD and Intel GPUs";
+                    : OperatingSystem.IsLinux() ? "GPU: AMD / Intel — normal mpv playback; NVIDIA required for inference" : "GPU: no NVIDIA device detected — the built-in DirectML engine covers AMD and Intel GPUs";
                 GpuNvidia = nvidia;
                 GpuName = nvidia ? gpu.GetProperty("name").GetString() : null;
 
