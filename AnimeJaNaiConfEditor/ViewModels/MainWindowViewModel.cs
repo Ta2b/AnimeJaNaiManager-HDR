@@ -68,6 +68,11 @@ namespace AnimeJaNaiConfEditor.ViewModels
 
         public static bool VulkanOnDisk() => OperatingSystem.IsLinux() && File.Exists(Path.Combine(
             Environment.GetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR") ?? Path.Combine(DataDir, "inference"), "libaji_vulkan.so"));
+        // The ONNX Runtime engine; the vendor provider itself is only known at playback.
+        public static bool OnnxRuntimeOnDisk() => OperatingSystem.IsLinux() && File.Exists(Path.Combine(
+            Environment.GetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR") ?? Path.Combine(DataDir, "inference"), "libaji_ort.so"));
+        private bool _onnxRuntimeSelectable;
+        public bool OnnxRuntimeSelectable { get => _onnxRuntimeSelectable; set => this.RaiseAndSetIfChanged(ref _onnxRuntimeSelectable, value); }
         public static bool VulkanRifeOnDisk() => File.Exists(Path.Combine(DataDir, "rife-vulkan", "rife-v4.6", "flownet.param")) &&
             File.Exists(Path.Combine(DataDir, "rife-vulkan", "rife-v4.6", "flownet.bin"));
         private bool _vulkanSelectable;
@@ -146,9 +151,16 @@ namespace AnimeJaNaiConfEditor.ViewModels
             if (LinuxFeatures)
             {
                 VulkanSelectable = VulkanOnDisk();
+                OnnxRuntimeSelectable = OnnxRuntimeOnDisk();
                 AnimeJaNaiConf.BackendAutoFallback = false;
                 if (AnimeJaNaiConf.DirectMlSelected) AnimeJaNaiConf.SetTensorRtSelected();
-                BackendNotice = AnimeJaNaiConf.VulkanSelected
+                BackendNotice = AnimeJaNaiConf.OnnxRuntimeSelected
+                    ? (OnnxRuntimeSelectable
+                        ? (AnimeJaNaiConf.MiGraphXSelected
+                            ? "Experimental: MIGraphX for AMD GPUs supported by ROCm. Needs an ONNX Runtime build with the MIGraphX provider in animejanai/inference. Upscaling only, no RIFE yet; SDR sources."
+                            : "Experimental: OpenVINO for Intel GPUs. Needs an ONNX Runtime build with the OpenVINO provider in animejanai/inference. Upscaling only, no RIFE yet; SDR sources.")
+                        : "ONNX Runtime engine missing (libaji_ort.so). Normal playback remains available.")
+                    : AnimeJaNaiConf.VulkanSelected
                     ? (VulkanSelectable ? "Linux Vulkan: spatial SPAN AnimeJaNai and RIFE 4.6. SDR sources, even dimensions; CPU/GPU transfers."
                         : "Vulkan library missing. Normal playback remains available.")
                     : (trtUsable ? "Linux TensorRT: NVIDIA only. Use ONNX RIFE models, not Vulkan RIFE 4.6."
@@ -829,6 +841,12 @@ chain_2_rife=no";
                     case Backend.Vulkan:
                         animeJaNaiConf.SetVulkanSelected();
                         break;
+                    case Backend.MIGraphX:
+                        animeJaNaiConf.SetOnnxRuntimeSelected(false);
+                        break;
+                    case Backend.OpenVINO:
+                        animeJaNaiConf.SetOnnxRuntimeSelected(true);
+                        break;
                     case Backend.TensorRT:
                     default:
                         animeJaNaiConf.SetTensorRtSelected();
@@ -1391,7 +1409,7 @@ chain_2_rife=no";
 
         private void WriteDefaultProfile(bool upscaleOff = false)
         {
-            if (LinuxFeatures && !(AnimeJaNaiConf.VulkanSelected ? VulkanSelectable : TrtSelectable) && !upscaleOff) { BackendNotice = "The selected inference backend is unavailable. Normal playback remains available."; return; }
+            if (LinuxFeatures && !(AnimeJaNaiConf.OnnxRuntimeSelected ? OnnxRuntimeSelectable : AnimeJaNaiConf.VulkanSelected ? VulkanSelectable : TrtSelectable) && !upscaleOff) { BackendNotice = "The selected inference backend is unavailable. Normal playback remains available."; return; }
             if (LinuxFeatures && AnimeJaNaiConf.VulkanSelected && !upscaleOff && ShowDefaultProfiles)
             { BackendNotice = "Vulkan uses custom Linux slots 1–4; built-in ONNX profiles are unavailable."; return; }
             var profile = upscaleOff ? "upscale-off" : CurrentSlot.MpvProfileName;
@@ -1438,6 +1456,14 @@ chain_2_rife=no";
                     x => x.VulkanSelected,
                     x => x.BackendAutoFallback,
                     x => x.TrtEngineSettings).Subscribe(x =>
+                    {
+                        Vm?.WriteAnimeJaNaiConf();
+                    });
+
+                // The ONNX Runtime engines, in their own subscription (same tuple size limit).
+                this.WhenAnyValue(
+                    x => x.MiGraphXSelected,
+                    x => x.OpenVinoSelected).Subscribe(x =>
                     {
                         Vm?.WriteAnimeJaNaiConf();
                     });
@@ -1513,6 +1539,25 @@ chain_2_rife=no";
             get => _vulkanSelected;
             set => this.RaiseAndSetIfChanged(ref _vulkanSelected, value);
         }
+
+        // ONNX Runtime engine (Linux): MIGraphX for AMD on ROCm, OpenVINO for Intel.
+        private bool _miGraphXSelected;
+        [DataMember]
+        public bool MiGraphXSelected
+        {
+            get => _miGraphXSelected;
+            set => this.RaiseAndSetIfChanged(ref _miGraphXSelected, value);
+        }
+
+        private bool _openVinoSelected;
+        [DataMember]
+        public bool OpenVinoSelected
+        {
+            get => _openVinoSelected;
+            set => this.RaiseAndSetIfChanged(ref _openVinoSelected, value);
+        }
+
+        public bool OnnxRuntimeSelected => MiGraphXSelected || OpenVinoSelected;
 
         // Per-profile Standard vs Sharp model selection for the three built-in default profiles.
         // Persisted as [global] quality_preset / balanced_preset / performance_preset and honored at
@@ -1695,6 +1740,8 @@ chain_2_rife=no";
             TensorRtSelected = true;
             DirectMlSelected = false;
             VulkanSelected = false;
+            MiGraphXSelected = false;
+            OpenVinoSelected = false;
         }
 
         public void SetDirectMlSelected()
@@ -1703,6 +1750,8 @@ chain_2_rife=no";
             DirectMlSelected = true;
             TensorRtSelected = false;
             VulkanSelected = false;
+            MiGraphXSelected = false;
+            OpenVinoSelected = false;
         }
 
         public void SetVulkanSelected()
@@ -1711,6 +1760,33 @@ chain_2_rife=no";
             TensorRtSelected = false;
             DirectMlSelected = false;
             VulkanSelected = true;
+            MiGraphXSelected = false;
+            OpenVinoSelected = false;
+        }
+
+        // openVino false = MIGraphX. Linux only: Windows keeps DirectML for AMD and Intel.
+        public void SetOnnxRuntimeSelected(bool openVino)
+        {
+            if (!OperatingSystem.IsLinux()) { SetTensorRtSelected(); return; }
+            TensorRtSelected = false;
+            DirectMlSelected = false;
+            VulkanSelected = false;
+            MiGraphXSelected = !openVino;
+            OpenVinoSelected = openVino;
+        }
+
+        public void UserSelectMiGraphX()
+        {
+            BackendAutoFallback = false;
+            SetOnnxRuntimeSelected(false);
+            Vm?.RefreshComponentAwareness();
+        }
+
+        public void UserSelectOpenVino()
+        {
+            BackendAutoFallback = false;
+            SetOnnxRuntimeSelected(true);
+            Vm?.RefreshComponentAwareness();
         }
 
         public void UserSelectVulkan()
@@ -1751,7 +1827,8 @@ chain_2_rife=no";
             set => this.RaiseAndSetIfChanged(ref _gpuSubtitles, value);
         }
 
-        public Backend SelectedBackend => VulkanSelected ? Backend.Vulkan : DirectMlSelected ? Backend.DirectML : Backend.TensorRT;
+        public Backend SelectedBackend => MiGraphXSelected ? Backend.MIGraphX : OpenVinoSelected ? Backend.OpenVINO
+            : VulkanSelected ? Backend.Vulkan : DirectMlSelected ? Backend.DirectML : Backend.TensorRT;
 
         private bool _autoDisplayRefresh;
         [DataMember]
@@ -2181,6 +2258,8 @@ chain_2_rife=no";
         TensorRT,
         DirectML,
         Vulkan,
-        NCNN
+        NCNN,
+        MIGraphX,
+        OpenVINO
     }
 }

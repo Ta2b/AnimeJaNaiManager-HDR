@@ -217,9 +217,11 @@
                   <TextBlock Text="Inference engine" Margin="0,0,12,0" VerticalAlignment="Center" />
                   <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TensorRtSelected}" Content="TensorRT" Command="{Binding AnimeJaNaiConf.UserSelectTensorRt}" IsEnabled="{Binding TrtSelectable}" />
                   <ToggleButton IsChecked="{Binding AnimeJaNaiConf.VulkanSelected}" Content="Vulkan" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding VulkanSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectVulkan}" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.MiGraphXSelected}" Content="MIGraphX" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding OnnxRuntimeSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectMiGraphX}" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.OpenVinoSelected}" Content="OpenVINO" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding OnnxRuntimeSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectOpenVino}" />
                   <ToggleButton IsChecked="{Binding AnimeJaNaiConf.DirectMlSelected}" Content="DirectML" IsEnabled="{Binding WindowsFeatures}" Command="{Binding AnimeJaNaiConf.UserSelectDirectMl}" />
                 </WrapPanel>
-                <TextBlock Classes="help" Text="TensorRT: NVIDIA. DirectML: Windows. Vulkan: Linux. Choose the startup profile in Profiles; restart playback after changing the engine." />
+                <TextBlock Classes="help" Text="TensorRT: NVIDIA. DirectML: Windows. Vulkan: Linux, any GPU. MIGraphX (AMD on ROCm) and OpenVINO (Intel): Linux, experimental. Choose the startup profile in Profiles; restart playback after changing the engine." />
                 <TextBlock TextWrapping="Wrap" Foreground="Orange" IsVisible="{Binding HasBackendNotice}" Text="{Binding BackendNotice}" />
               </StackPanel>
             </Border>
