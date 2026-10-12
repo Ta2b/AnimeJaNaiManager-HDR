@@ -7,7 +7,7 @@ try
     if (args.Length == 3 && args[0] == "--save-hdr")
     {
         var live = new HdrSettings(args[1]);
-        live.LinuxOutput = args[2]; live.MpvContrast = 130; live.Save();
+        live.LinuxOutput = args[2]; live.RtxContrast = 130; live.Save();
         if (live.SaveNotice.Length > 0) throw new Exception(live.SaveNotice);
         return 0;
     }

@@ -298,28 +298,33 @@
                       <TextBlock Text="%" Margin="6,0" VerticalAlignment="Center" />
                     </WrapPanel>
                     <WrapPanel IsEnabled="{Binding HdrSettings.EnhancementControlsEnabled}">
-                      <TextBlock Text="mpv SDR white" Width="180" VerticalAlignment="Center" />
+                      <TextBlock Text="mpv SDR white (unmatched)" Width="180" VerticalAlignment="Center" />
                       <NumericUpDown Value="{Binding HdrSettings.SdrWhite}" Minimum="80" Maximum="400" Increment="10" FormatString="0" Width="120" />
                       <TextBlock Text="nits" Margin="6,0" VerticalAlignment="Center" />
                     </WrapPanel>
                     <WrapPanel IsEnabled="{Binding HdrSettings.EnhancementControlsEnabled}">
-                      <TextBlock Text="mpv highlights / vibrance" Width="180" VerticalAlignment="Center" />
+                      <TextBlock Text="mpv highlights (unmatched)" Width="180" VerticalAlignment="Center" />
                       <NumericUpDown Value="{Binding HdrSettings.HighlightsMpv}" Minimum="0" Maximum="100" Increment="5" FormatString="0" Width="120" />
                       <NumericUpDown Value="{Binding HdrSettings.VibranceMpv}" Minimum="0" Maximum="80" Increment="5" FormatString="0" Width="120" Margin="8,0" />
                       <TextBlock Text="%" VerticalAlignment="Center" />
                     </WrapPanel>
-                    <WrapPanel IsEnabled="{Binding RtxHdrSelectable}">
-                      <TextBlock Text="RTX highlights / vibrance" Width="180" VerticalAlignment="Center" />
+                    <WrapPanel>
+                      <TextBlock Text="Highlights / vibrance" Width="180" VerticalAlignment="Center" />
                       <NumericUpDown Value="{Binding HdrSettings.HighlightsRtx}" Minimum="0" Maximum="100" Increment="5" FormatString="0" Width="120" />
                       <NumericUpDown Value="{Binding HdrSettings.VibranceRtx}" Minimum="0" Maximum="80" Increment="5" FormatString="0" Width="120" Margin="8,0" />
                       <TextBlock Text="%" VerticalAlignment="Center" />
                     </WrapPanel>
-                    <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.MpvTrueHdrLook}" Content="Use the TrueHDR look with mpv conversion" />
-                    <WrapPanel IsEnabled="{Binding HdrSettings.MpvTrueHdrLook}">
-                      <TextBlock Text="mpv contrast / saturation" Width="180" VerticalAlignment="Center" />
-                      <NumericUpDown Value="{Binding HdrSettings.MpvContrast}" Minimum="100" Maximum="200" Increment="10" FormatString="0" Width="120" />
-                      <NumericUpDown Value="{Binding HdrSettings.MpvSaturation}" Minimum="100" Maximum="200" Increment="10" FormatString="0" Width="120" Margin="8,0" />
+                    <WrapPanel>
+                      <TextBlock Text="HDR look: contrast / saturation" Width="180" VerticalAlignment="Center" />
+                      <NumericUpDown Value="{Binding HdrSettings.RtxContrast}" Minimum="0" Maximum="200" Increment="10" FormatString="0" Width="120" />
+                      <NumericUpDown Value="{Binding HdrSettings.RtxSaturation}" Minimum="0" Maximum="200" Increment="10" FormatString="0" Width="120" Margin="8,0" />
                     </WrapPanel>
+                    <WrapPanel>
+                      <TextBlock Text="HDR look: middle grey" Width="180" VerticalAlignment="Center" />
+                      <NumericUpDown Value="{Binding HdrSettings.RtxMiddleGray}" Minimum="10" Maximum="100" Increment="5" FormatString="0" Width="120" />
+                    </WrapPanel>
+                    <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.MpvTrueHdrLook}" Content="Match the mpv conversion to RTX Video HDR (same look on every GPU)" />
+                    <TextBlock Classes="help" Text="One look for every GPU. Contrast, saturation (100 = neutral, 0 to 200) and middle grey are the RTX Video HDR settings; with the box checked, the mpv conversion used on AMD and Intel follows the same curve, measured on RTX TrueHDR, and the same highlights and vibrance. With Direct3D 11 on NVIDIA, RTX Video HDR reads the NVIDIA App sliders instead: set the same values there, or use Vulkan. Unchecked, mpv uses its own conversion with the two 'unmatched' rows." />
                   </StackPanel>
                 </Expander>
               </StackPanel>
@@ -365,17 +370,8 @@
                       <TextBlock Text="VSR quality" Width="150" VerticalAlignment="Center" />
                       <NumericUpDown Value="{Binding HdrSettings.RtxVsrQuality}" Minimum="1" Maximum="4" Increment="1" FormatString="0" Width="110" />
                     </WrapPanel>
-                    <WrapPanel>
-                      <TextBlock Text="Contrast / saturation" Width="150" VerticalAlignment="Center" />
-                      <NumericUpDown Value="{Binding HdrSettings.RtxContrast}" Minimum="0" Maximum="200" Increment="10" FormatString="0" Width="110" />
-                      <NumericUpDown Value="{Binding HdrSettings.RtxSaturation}" Minimum="0" Maximum="200" Increment="10" FormatString="0" Width="110" Margin="8,0" />
-                    </WrapPanel>
-                    <WrapPanel>
-                      <TextBlock Text="Middle gray" Width="150" VerticalAlignment="Center" />
-                      <NumericUpDown Value="{Binding HdrSettings.RtxMiddleGray}" Minimum="10" Maximum="100" Increment="5" FormatString="0" Width="110" />
-                    </WrapPanel>
                     <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.SkipHeldFrames}" Content="Reuse identical held frames" />
-                    <TextBlock Classes="help" Text="These RTX controls apply to the NVIDIA engine with Vulkan rendering. Other output paths use the NVIDIA App settings." />
+                    <TextBlock Classes="help" Text="These controls apply to the NVIDIA engine with Vulkan rendering. Contrast, saturation and middle grey are in the HDR section: they are shared with the mpv conversion." />
                   </StackPanel>
                 </Expander>
               </StackPanel>
