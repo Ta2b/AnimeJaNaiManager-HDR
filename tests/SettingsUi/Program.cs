@@ -68,6 +68,24 @@ try
     window.Width = 780; Dispatcher.UIThread.RunJobs();
     using (var frame = window.CaptureRenderedFrame()) frame!.Save(Path.ChangeExtension(output, ".narrow.png"));
     Check("small window keeps display controls inside client width", oled.TranslatePoint(new Point(oled.Bounds.Width, 0), window)?.X <= window.ClientSize.Width);
+    if (OperatingSystem.IsLinux())
+    {
+        // "Run Benchmarks" on Linux: the launcher's output must reach the progress window.
+        Directory.CreateDirectory(Path.Combine(data, "benchmarks"));
+        File.WriteAllText(Path.Combine(data, "benchmarks", "animejanai_benchmark_all.sh"),
+            "#!/bin/sh\nprintf 'Performance @ 1280x720 '\nsleep 1\necho '123.4 fps'\necho 'to stderr' >&2\n");
+        typeof(MainWindow).GetMethod("ShowBenchmarkWindow", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(window, null);
+        string shown = "";
+        for (int i = 0; i < 300 && !shown.Contains("Finished"); i++)
+        {
+            Thread.Sleep(100); Dispatcher.UIThread.RunJobs();
+            var progress = window.OwnedWindows.FirstOrDefault(w => w.Title == "AnimeJaNai playback benchmark");
+            shown = (progress?.Content as TextBox)?.Text ?? "";
+        }
+        Check("benchmark output shown live, with errors and the end", shown.Contains("Performance @ 1280x720 123.4 fps") && shown.Contains("to stderr") && shown.Contains("Finished"));
+        foreach (var owned in window.OwnedWindows.ToList()) owned.Close();
+    }
     window.Close();
     return 0;
 }

@@ -336,8 +336,11 @@ namespace AnimeJaNaiConfEditor.Views
                     Text =
                         "This measures your real playback fps across several resolutions for the " +
                         "Balanced and Performance templates.\n\n" +
-                        "mpv windows will open and close on their own while it runs. Do not close " +
-                        "or click them, or the results will be invalid.\n\n" +
+                        (OperatingSystem.IsWindows()
+                            ? "mpv windows will open and close on their own while it runs. Do not close " +
+                              "or click them, or the results will be invalid.\n\n"
+                            : "It runs offscreen and shows its progress in a window. Close the player and " +
+                              "leave the computer idle while it runs, or the results will be invalid.\n\n") +
                         "The first run builds a TensorRT engine per resolution (about a minute " +
                         "each, cached afterward), so the whole benchmark can take 10+ minutes depending on your hardware.",
                 },
@@ -348,8 +351,77 @@ namespace AnimeJaNaiConfEditor.Views
                 },
             };
             td.XamlRoot = this;
-            if (Equals(await td.ShowAsync(), runResult))
-                vm.LaunchBenchmark();
+            if (!Equals(await td.ShowAsync(), runResult)) return;
+            // Windows: the launcher opens its own console. Linux has no console to open: the
+            // benchmark's output is shown here while it runs.
+            if (OperatingSystem.IsWindows()) vm.LaunchBenchmark();
+            else ShowBenchmarkWindow();
+        }
+
+        private void ShowBenchmarkWindow()
+        {
+            var output = new TextBox
+            {
+                IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap,
+                FontFamily = new Avalonia.Media.FontFamily("monospace"), FontSize = 13,
+                BorderThickness = new Thickness(0),
+                Text = "Starting the playback benchmark. Leave the player closed and the computer idle while it runs.\n\n",
+            };
+            var window = new Window
+            {
+                Title = "AnimeJaNai playback benchmark", Width = 820, Height = 520,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = output,
+            };
+            var process = new System.Diagnostics.Process();
+            process.StartInfo.FileName = "/bin/sh";
+            // One pipe for both streams, so that errors appear where they happened.
+            string script = Path.Combine(MainWindowViewModel.DataDir, "benchmarks", "animejanai_benchmark_all.sh");
+            process.StartInfo.ArgumentList.Add("-c");
+            process.StartInfo.ArgumentList.Add("exec /bin/sh \"$0\" 2>&1");
+            process.StartInfo.ArgumentList.Add(script);
+            process.StartInfo.WorkingDirectory = MainWindowViewModel.DataDir;
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.RedirectStandardOutput = true;
+            bool closed = false;
+            void Append(string text) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (closed) return;
+                output.Text += text;
+                output.CaretIndex = output.Text.Length;
+            });
+            // Character by character: a cell prints its name, then its result a minute later.
+            async Task Pump(StreamReader reader)
+            {
+                var buffer = new char[256];
+                int read;
+                while ((read = await reader.ReadAsync(buffer, 0, buffer.Length)) > 0) Append(new string(buffer, 0, read));
+            }
+            window.Closed += (_, _) =>
+            {
+                closed = true;
+                try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+                process.Dispose();
+            };
+            window.Show(this);
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    if (!File.Exists(script))
+                    {
+                        Append("The benchmark is not installed here (" + script + ").\nRestart the player once after an update, then try again.\n");
+                        return;
+                    }
+                    process.Start();
+                    await Pump(process.StandardOutput);
+                    await process.WaitForExitAsync();
+                    Append(process.ExitCode == 0
+                        ? "\nFinished. The results are saved; \"Submit Benchmark\" can share them.\n"
+                        : "\nThe benchmark stopped (code " + process.ExitCode + ").\n");
+                }
+                catch (Exception ex) when (!closed) { Append("\nCould not run the benchmark: " + ex.Message + "\n"); }
+                catch (Exception) { }
+            });
         }
 
         private async void SubmitBenchmarkButtonClick(object? sender, RoutedEventArgs e)
