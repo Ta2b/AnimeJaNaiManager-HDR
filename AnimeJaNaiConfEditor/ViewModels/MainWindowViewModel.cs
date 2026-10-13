@@ -81,7 +81,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             ? "Follow video keeps SDR video in SDR and HDR video in HDR. HDR PQ converts SDR video to HDR: for an XDR or other HDR display. Ctrl+H in the player switches the conversion, Ctrl+I shows the output diagnosis."
             : "Auto follows the compositor. Enable HDR in the desktop settings (GNOME, KDE) on a compatible display; grading requires negotiated PQ output. Ctrl+Alt+H shows the output diagnosis.";
         public string RifeMissingNote => OnMac
-            ? "RIFE interpolation is not available with the Apple engines yet."
+            ? "The RIFE models are missing from this installation."
             : "RIFE models are not installed. Install them from the Components tab to use interpolation.";
         private string _expectedHash = "";
         private string _expectedBank = "";
@@ -222,7 +222,8 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 AppleCoreMlSelectable = AnyModelFile("*.mlpatch");
                 AppleMetalSelectable = AnyModelFile("*.ajm");
                 AnimeJaNaiConf.BackendAutoFallback = false;
-                RifeMissing = true;
+                // Interpolation runs through Core ML with whichever engine upscales.
+                RifeMissing = !RifeOnDisk();
                 BackendNotice = AnimeJaNaiConf.AppleEngine == "Metal" && !AppleMetalSelectable ? "The Metal model files are missing from this installation."
                     : AnimeJaNaiConf.AppleEngine == "CoreMLNative" && !AppleCoreMlSelectable ? "The Core ML model files are missing from this installation."
                     : "";
@@ -995,6 +996,8 @@ chain_2_rife=no";
             animeJaNaiConf.SetAppleDevice(parser.GetValue("global", "apple_device", "AUTO"));
             animeJaNaiConf.SetEngineReuse(parser.GetValue("global", "engine_reuse", "frame"));
             animeJaNaiConf.AppleAutoProfile = ParseBool(parser.GetValue("global", "apple_auto_profile", "yes"));
+            animeJaNaiConf.SetRifeDevice(parser.GetValue("global", "engine_rife_device", "auto"));
+            animeJaNaiConf.EngineBoost = ParseBool(parser.GetValue("global", "engine_boost", "no"));
 
             if (int.TryParse(parser.GetValue("global", "default_slot", ""), out var defaultSlot))
             {
@@ -1304,6 +1307,8 @@ chain_2_rife=no";
                 parser.SetValue("global", "apple_device", conf.AppleDevice);
                 parser.SetValue("global", "engine_reuse", conf.EngineReuse);
                 parser.SetValue("global", "apple_auto_profile", conf.AppleAutoProfile ? "yes" : "no");
+                parser.SetValue("global", "engine_rife_device", conf.RifeDevice);
+                parser.SetValue("global", "engine_boost", conf.EngineBoost ? "yes" : "no");
             }
             parser.SetValue("global", "logging", conf.EnableLogging ? "yes" : "no");
             // Write-minimal: only persist default_slot when the user picked one (absent => the vf
@@ -1898,8 +1903,9 @@ chain_2_rife=no";
         // Three engines run the same models: Core ML through ONNX Runtime ("CoreML", the first one
         // shipped), Core ML alone ("CoreMLNative") and Metal ("Metal").
         public static readonly string[] AppleEngines = ["CoreML", "CoreMLNative", "Metal"];
-        // AUTO = Core ML chooses; NPU = the Neural Engine; GPU+NPU = both on one frame.
-        public static readonly string[] AppleDevices = ["AUTO", "GPU", "NPU", "CPU", "GPU+NPU"];
+        // AUTO = Core ML chooses; NPU = the Neural Engine; GPU+NPU = both on one frame;
+        // GPU+NPU+CPU = the CPU takes tiles as well.
+        public static readonly string[] AppleDevices = ["AUTO", "GPU", "NPU", "CPU", "GPU+NPU", "GPU+NPU+CPU"];
 
         private string _appleEngine = "CoreML";
         [DataMember]
@@ -1941,20 +1947,27 @@ chain_2_rife=no";
             private set
             {
                 this.RaiseAndSetIfChanged(ref _appleDevice, value);
-                foreach (string name in new[] { nameof(AppleDeviceAuto), nameof(AppleDeviceGpu), nameof(AppleDeviceNpu), nameof(AppleDeviceCpu), nameof(AppleDeviceGpuNpu), nameof(AppleDeviceNote) })
+                foreach (string name in new[] { nameof(AppleDeviceAuto), nameof(AppleDeviceGpu), nameof(AppleDeviceNpu), nameof(AppleDeviceCpu), nameof(AppleDeviceGpuNpu), nameof(AppleDeviceGpuNpuCpu), nameof(AppleDeviceNote) })
                     this.RaisePropertyChanged(name);
             }
         }
 
-        // Metal is the GPU: its only choices are the GPU alone, or the GPU with the Neural Engine
-        // (reached through Core ML). The two Core ML engines take every target.
+        // Metal is the GPU: its choices are the GPU alone, or the GPU with the Neural Engine and
+        // the CPU (both reached through Core ML). The two Core ML engines take every target.
         public bool AppleDeviceChoice => AppleEngine != "Metal";
         public static string NormalizeAppleDevice(string engine, string? value)
         {
             string wanted = (value ?? "").Trim().ToUpperInvariant().Replace(" ", "");
-            wanted = wanted switch { "ALL" or "" => "AUTO", "ANE" => "NPU", "GPU+ANE" or "ANE+GPU" or "NPU+GPU" => "GPU+NPU", _ => wanted };
+            wanted = wanted.Replace("ANE", "NPU");
+            // The order of a list of processors does not matter: GPU first, then NPU, then CPU.
+            if (wanted.Contains('+'))
+            {
+                var parts = wanted.Split('+', StringSplitOptions.RemoveEmptyEntries).Distinct().ToList();
+                wanted = string.Join("+", new[] { "GPU", "NPU", "CPU" }.Where(parts.Contains));
+            }
+            wanted = wanted switch { "ALL" or "" => "AUTO", _ => wanted };
             if (!AppleDevices.Contains(wanted)) wanted = "AUTO";
-            if (engine == "Metal" && wanted != "GPU+NPU") wanted = "GPU";
+            if (engine == "Metal" && wanted is not ("GPU+NPU" or "GPU+NPU+CPU")) wanted = "GPU";
             return wanted;
         }
         public void SetAppleDevice(string? value) => AppleDevice = NormalizeAppleDevice(AppleEngine, value);
@@ -1963,9 +1976,12 @@ chain_2_rife=no";
         public bool AppleDeviceNpu { get => AppleDevice == "NPU"; set { if (value) SetAppleDevice("NPU"); else this.RaisePropertyChanged(); } }
         public bool AppleDeviceCpu { get => AppleDevice == "CPU"; set { if (value) SetAppleDevice("CPU"); else this.RaisePropertyChanged(); } }
         public bool AppleDeviceGpuNpu { get => AppleDevice == "GPU+NPU"; set { if (value) SetAppleDevice("GPU+NPU"); else this.RaisePropertyChanged(); } }
+        public bool AppleDeviceGpuNpuCpu { get => AppleDevice == "GPU+NPU+CPU"; set { if (value) SetAppleDevice("GPU+NPU+CPU"); else this.RaisePropertyChanged(); } }
         public string AppleDeviceNote => (AppleEngine, AppleDevice) switch
         {
             ("Metal", "GPU+NPU") => "Metal on the GPU and Core ML on the Neural Engine share the tiles of each frame.",
+            ("Metal", "GPU+NPU+CPU") => "Metal on the GPU, Core ML on the Neural Engine and on the CPU share the tiles of each frame. The CPU also decodes the video: compare with GPU + Neural Engine in Run Benchmarks.",
+            (_, "GPU+NPU+CPU") => "The GPU, the Neural Engine and the CPU share the tiles of each frame. The CPU also decodes the video: compare with GPU + Neural Engine in Run Benchmarks.",
             ("Metal", _) => "The whole network runs on the GPU through Metal.",
             (_, "AUTO") => "Core ML decides where each operation runs.",
             (_, "GPU") => "Core ML on the GPU (the CPU remains its fallback for an operation the GPU cannot run).",
@@ -1992,7 +2008,40 @@ chain_2_rife=no";
         {
             string wanted = (value ?? "").Trim().ToLowerInvariant();
             EngineReuse = wanted is "off" or "no" or "false" or "0" ? "off" : wanted is "tiles" or "areas" ? "tiles" : "frame";
+            this.RaisePropertyChanged(nameof(EngineBoostChoice));
         }
+
+        // [global] engine_rife_device: the processor of the RIFE interpolation, which Core ML runs
+        // whatever the engine that upscales. auto = Core ML chooses.
+        private string _rifeDevice = "auto";
+        [DataMember]
+        public string RifeDevice
+        {
+            get => _rifeDevice;
+            private set
+            {
+                this.RaiseAndSetIfChanged(ref _rifeDevice, value);
+                foreach (string name in new[] { nameof(RifeDeviceAuto), nameof(RifeDeviceGpu), nameof(RifeDeviceNpu), nameof(RifeDeviceCpu) })
+                    this.RaisePropertyChanged(name);
+            }
+        }
+        public void SetRifeDevice(string? value)
+        {
+            string wanted = (value ?? "").Trim().ToLowerInvariant();
+            RifeDevice = wanted switch { "gpu" => "gpu", "npu" or "ane" => "npu", "cpu" => "cpu", _ => "auto" };
+        }
+        public bool RifeDeviceAuto { get => RifeDevice == "auto"; set { if (value) SetRifeDevice("auto"); else this.RaisePropertyChanged(); } }
+        public bool RifeDeviceGpu { get => RifeDevice == "gpu"; set { if (value) SetRifeDevice("gpu"); else this.RaisePropertyChanged(); } }
+        public bool RifeDeviceNpu { get => RifeDevice == "npu"; set { if (value) SetRifeDevice("npu"); else this.RaisePropertyChanged(); } }
+        public bool RifeDeviceCpu { get => RifeDevice == "cpu"; set { if (value) SetRifeDevice("cpu"); else this.RaisePropertyChanged(); } }
+
+        // [global] engine_boost: a drawing that stays on screen for several frames is computed
+        // with the Balanced model of the profile's family when that time covers it. The engine
+        // applies it with whole-frame reuse and profiles that do not interpolate.
+        private bool _engineBoost = false;
+        [DataMember]
+        public bool EngineBoost { get => _engineBoost; set => this.RaiseAndSetIfChanged(ref _engineBoost, value); }
+        public bool EngineBoostChoice => EngineReuse == "frame";
         public bool EngineReuseOff { get => EngineReuse == "off"; set { if (value) SetEngineReuse("off"); else this.RaisePropertyChanged(); } }
         public bool EngineReuseFrame { get => EngineReuse == "frame"; set { if (value) SetEngineReuse("frame"); else this.RaisePropertyChanged(); } }
         public bool EngineReuseTiles { get => EngineReuse == "tiles"; set { if (value) SetEngineReuse("tiles"); else this.RaisePropertyChanged(); } }
@@ -2303,6 +2352,9 @@ chain_2_rife=no";
                 this.RaisePropertyChanged(nameof(RifeToggleEnabled));
             }
         }
+
+        // The models of the macOS application have no ensemble variant.
+        public bool RifeEnsembleChoice => !MainWindowViewModel.OnMac;
 
         // Enabling RIFE needs the models; disabling it must always be possible.
         // So the toggle locks only in the unchecked-and-not-installed state.

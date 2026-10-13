@@ -236,6 +236,7 @@
                     <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceNpu}" Content="Neural Engine (NPU)" IsEnabled="{Binding AnimeJaNaiConf.AppleDeviceChoice}" />
                     <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceCpu}" Content="CPU" IsEnabled="{Binding AnimeJaNaiConf.AppleDeviceChoice}" />
                     <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceGpuNpu}" Content="GPU + Neural Engine" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceGpuNpuCpu}" Content="GPU + Neural Engine + CPU" />
                   </WrapPanel>
                   <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="{Binding AnimeJaNaiConf.AppleDeviceNote}" />
                   <WrapPanel>
@@ -244,9 +245,19 @@
                     <ToggleButton IsChecked="{Binding AnimeJaNaiConf.EngineReuseFrame}" Content="Whole frames" />
                     <ToggleButton IsChecked="{Binding AnimeJaNaiConf.EngineReuseTiles}" Content="Areas of the frame" />
                   </WrapPanel>
-                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="Anime holds a drawing for several frames and often moves only part of the picture. Whole frames: a frame identical to the last computed one keeps its result. Areas of the frame: the picture is cut in four tiles and only the tiles that changed are computed (a little more work when everything moves)." />
+                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="Anime holds a drawing for several frames and often moves only part of the picture. Whole frames: a frame identical to the last computed one keeps its result. Areas of the frame: when only a part of the picture changed (a mouth, a blink), only the areas that changed are computed; a frame where everything moves is computed whole." />
+                  <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.EngineBoost}" IsEnabled="{Binding AnimeJaNaiConf.EngineBoostChoice}" Content="Balanced model on drawings that stay on screen (experimental)" />
+                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="With a Performance profile and whole-frame reuse: a drawing held for several frames is computed once, with the Balanced model of the same family when the time it stays on screen covers it. Motion stays on the Performance model. Not applied to profiles that interpolate. Ctrl+J shows how often it is used." />
+                  <WrapPanel>
+                    <TextBlock Text="RIFE interpolation on" Width="200" VerticalAlignment="Center" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeDeviceAuto}" Content="Auto" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeDeviceGpu}" Content="GPU" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeDeviceNpu}" Content="Neural Engine (NPU)" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeDeviceCpu}" Content="CPU" />
+                  </WrapPanel>
+                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="RIFE is enabled per profile (Profiles). Core ML runs it, on the processor chosen here, whichever engine upscales. Interpolating before the upscale costs less: the pictures between two frames are computed at the source size, then upscaled like a frame. Two identical frames (a held drawing) and scene cuts are not interpolated." />
                   <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.AppleAutoProfile}" Content="Move to a lighter profile when this Mac cannot keep up with the video" />
-                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="The player measures the time spent on each frame and remembers the profile this Mac holds; Ctrl+R in the player forgets it and measures again, Ctrl+J shows the timings and where the model runs. Choose the startup profile in Profiles. RIFE interpolation is not available with these engines yet." />
+                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="The player measures the time spent on each frame and remembers the profile this Mac holds; Ctrl+R in the player forgets it and measures again, Ctrl+J shows the timings and where the model runs. Choose the startup profile in Profiles." />
                 </StackPanel>
                 <TextBlock Classes="help" IsVisible="{Binding NotMacFeatures}" Text="Engines that this GPU cannot use are greyed. TensorRT: NVIDIA. DirectML: Windows. Vulkan: Linux, any GPU. MIGraphX (AMD on ROCm) and OpenVINO (Intel): Linux, experimental. Choose the startup profile in Profiles; restart playback after changing the engine." />
                 <TextBlock TextWrapping="Wrap" Foreground="Orange" IsVisible="{Binding HasBackendNotice}" Text="{Binding BackendNotice}" />
@@ -828,7 +839,7 @@
                                 </Grid>
 
                                 <Grid ColumnDefinitions="Auto,*" Margin="10,10,0,10" IsVisible="{Binding EnableRife}">
-                                  <CheckBox Grid.Column="0" IsChecked="{Binding RifeEnsemble}" Content="Ensemble" />
+                                  <CheckBox Grid.Column="0" IsChecked="{Binding RifeEnsemble}" Content="Ensemble" IsEnabled="{Binding RifeEnsembleChoice}" />
                                   <TextBlock Grid.Column="1" Classes="help" Foreground="Gray" Margin="20,0,0,0" Text="Whether or not to use the ensemble version of the model, which improves quality but runs slower." />
                                 </Grid>
 

@@ -208,6 +208,9 @@ try
                 throw new Exception("Compute target names are not normalised");
             if (N("Metal", "NPU") != "GPU" || N("Metal", "AUTO") != "GPU" || N("Metal", "CPU") != "GPU" || N("Metal", "GPU+ANE") != "GPU+NPU")
                 throw new Exception("Metal only takes the GPU, alone or with the Neural Engine");
+            if (N("CoreML", "cpu+ane+gpu") != "GPU+NPU+CPU" || N("Metal", "GPU+NPU+CPU") != "GPU+NPU+CPU" || N("CoreMLNative", "NPU+GPU") != "GPU+NPU"
+                || N("CoreML", "NPU+CPU") != "AUTO" || N("Metal", "NPU+CPU") != "GPU")
+                throw new Exception("Lists of processors are not normalised");
             Console.WriteLine("PASS macOS compute targets: every target for Core ML, GPU or GPU + Neural Engine for Metal");
 
             string macPath = Path.Combine(data, "mac.conf");
@@ -227,13 +230,19 @@ try
             vm.AnimeJaNaiConf.SetAppleDevice("GPU+NPU");
             vm.AnimeJaNaiConf.SetEngineReuse("tiles");
             vm.AnimeJaNaiConf.AppleAutoProfile = false;
+            vm.AnimeJaNaiConf.SetRifeDevice("ANE");
+            vm.AnimeJaNaiConf.EngineBoost = true;
+            if (vm.AnimeJaNaiConf.EngineBoostChoice) throw new Exception("The heavier model on held drawings is offered with whole-frame reuse only");
             vm.WriteAnimeJaNaiConf(macPath);
             string written = File.ReadAllText(macPath);
-            foreach (string line in new[] { "backend=CoreMLNative", "apple_device=GPU+NPU", "engine_reuse=tiles", "apple_auto_profile=no", "# keep me", "unknown=keep" })
+            foreach (string line in new[] { "backend=CoreMLNative", "apple_device=GPU+NPU", "engine_reuse=tiles", "apple_auto_profile=no",
+                "engine_rife_device=npu", "engine_boost=yes", "# keep me", "unknown=keep" })
                 if (!written.Contains(line)) throw new Exception("macOS save lost: " + line + "\n" + written);
             var again = vm.ReadAnimeJaNaiConf(macPath);
-            if (again.AppleEngine != "CoreMLNative" || again.AppleDevice != "GPU+NPU" || again.EngineReuse != "tiles" || again.AppleAutoProfile)
+            if (again.AppleEngine != "CoreMLNative" || again.AppleDevice != "GPU+NPU" || again.EngineReuse != "tiles" || again.AppleAutoProfile
+                || again.RifeDevice != "npu" || !again.EngineBoost)
                 throw new Exception("macOS settings lost at reload");
+            if (first.RifeDevice != "auto" || first.EngineBoost) throw new Exception("macOS defaults: automatic RIFE processor, no heavier model");
             Console.WriteLine("PASS macOS settings survive save and reload, comments and unknown keys kept");
 
             vm.AnimeJaNaiConf.UserSelectAppleEngine("CoreML");
@@ -246,16 +255,24 @@ try
             vm.AnimeJaNaiConf.UserSelectAppleEngine("Metal");
             if (!vm.GetAllModels().SequenceEqual(new[] { "perf" }) || vm.AnimeJaNaiConf.AppleDevice != "GPU")
                 throw new Exception("Metal lists the models converted for it and moves a Core ML target to the GPU");
-            if (vm.TrtSelectable || vm.VulkanSelectable || vm.RtxHdrSelectable || vm.SmoothMotionSelectable || !vm.RifeMissing
+            if (vm.TrtSelectable || vm.VulkanSelectable || vm.RtxHdrSelectable || vm.SmoothMotionSelectable
                 || !vm.AppleMetalSelectable || !vm.AppleCoreMlSelectable || !vm.MacFeatures || vm.WindowsFeatures || vm.LinuxFeatures)
                 throw new Exception("macOS offered an engine or an option of another platform");
             Console.WriteLine("PASS macOS model lists follow the engine; engines and options of other platforms are off");
+
+            // RIFE is offered once its models are in the installation.
+            Directory.CreateDirectory(Path.Combine(data, "rife"));
+            File.WriteAllText(Path.Combine(data, "rife", "rife_v4.26.onnx"), "fixture");
+            vm.RefreshComponentAwareness();
+            if (vm.RifeMissing) throw new Exception("macOS did not offer RIFE with its models installed");
+            Console.WriteLine("PASS macOS offers RIFE when its models are installed");
 
             MainWindowViewModel.Platform = MainWindowViewModel.Os.Linux;
             string linuxPath = Path.Combine(data, "not-mac.conf");
             vm.WriteAnimeJaNaiConf(linuxPath);
             string other = File.ReadAllText(linuxPath);
-            if (other.Contains("apple_device") || other.Contains("backend=Metal") || other.Contains("engine_reuse"))
+            if (other.Contains("apple_device") || other.Contains("backend=Metal") || other.Contains("engine_reuse")
+                || other.Contains("engine_boost") || other.Contains("engine_rife_device"))
                 throw new Exception("macOS keys written on another platform");
             Console.WriteLine("PASS other platforms do not write the macOS keys");
         }

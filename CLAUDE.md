@@ -26,11 +26,13 @@ window shows and what is written; use `OnWindows` / `OnLinux` / `OnMac`, never
 `OperatingSystem.Is*()` for a feature (the tests override `Platform`). macOS (Apple
 Silicon) has its own Global Settings panel, written to `[global]` of `animejanai.conf`:
 `backend` (`CoreML` = Core ML through ONNX Runtime, `CoreMLNative`, `Metal`),
-`apple_device` (`AUTO`, `GPU`, `NPU`, `CPU`, `GPU+NPU`; Metal only takes the GPU ones),
-`engine_reuse` (`off`, `frame`, `tiles`) and `apple_auto_profile`. Model lists follow the
+`apple_device` (`AUTO`, `GPU`, `NPU`, `CPU`, `GPU+NPU`, `GPU+NPU+CPU`; Metal only takes the
+ones that start with the GPU), `engine_reuse` (`off`, `frame`, `tiles`), `apple_auto_profile`,
+`engine_boost` (Balanced model on held drawings, offered with `engine_reuse=frame`) and
+`engine_rife_device` (`auto`, `gpu`, `npu`, `cpu`: the processor of RIFE). Model lists follow the
 engine: `NAME.mlpatch` for Core ML native, `NAME.ajm` for Metal; `NAME.coreml.onnx` is a
-variant, never listed. No TensorRT, DirectML, Vulkan, RIFE, component packs or built-in
-slots on macOS. Opened from its application without the player, the Manager uses
+variant, never listed. RIFE is offered when `rife/*.onnx` exist (no ensemble variants on
+macOS). No TensorRT, DirectML, Vulkan, component packs or built-in slots on macOS. Opened from its application without the player, the Manager uses
 `~/Library/Application Support/AnimeJaNai` and tells every running player to reload.
 
 ## Architecture
