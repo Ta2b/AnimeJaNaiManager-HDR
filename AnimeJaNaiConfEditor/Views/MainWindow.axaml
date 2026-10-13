@@ -100,11 +100,11 @@
           <TextBlock Margin="10,0,10,0" VerticalAlignment="Center">Global Settings</TextBlock>
         </StackPanel>
       </Button>
-      <TextBlock Margin="10">
+      <TextBlock Margin="10" IsVisible="{Binding ShowDefaultProfileList}">
         Default Profiles (Read-only)
       </TextBlock>
       
-      <ItemsControl ItemsSource="{Binding DefaultUpscaleSlots}">
+      <ItemsControl ItemsSource="{Binding DefaultUpscaleSlots}" IsVisible="{Binding ShowDefaultProfileList}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:UpscaleSlot">
             <Button HorizontalAlignment="Stretch" FontSize="13" Padding="10" IsVisible="{Binding ShowSlot}"
@@ -183,10 +183,10 @@
               Run Benchmarks
             </TextBlock>
           </StackPanel>
-          <TextBlock Width="280" TextWrapping="WrapWithOverflow" Margin="0,5,10,0" FontSize="10" Opacity=".5">Measure your real playback fps (the speed you will actually get) at several resolutions. mpv windows will open and close on their own during the test; leave them alone or the results will be invalid. Can take 10+ minutes depending on your hardware.</TextBlock>
+          <TextBlock Width="280" TextWrapping="WrapWithOverflow" Margin="0,5,10,0" FontSize="10" Opacity=".5" Text="{Binding BenchmarkDescription}" />
         </StackPanel>
       </Button>
-      <Button HorizontalAlignment="Stretch" FontSize="13" Padding="10" Click="SubmitBenchmarkButtonClick" HorizontalContentAlignment="Left">
+      <Button HorizontalAlignment="Stretch" FontSize="13" Padding="10" Click="SubmitBenchmarkButtonClick" HorizontalContentAlignment="Left" IsVisible="{Binding NotMacFeatures}">
         <StackPanel>
           <StackPanel Orientation="Horizontal">
             <materialIcons:MaterialIcon Kind="CloudUpload" VerticalAlignment="Center" />
@@ -213,7 +213,7 @@
             <Border Classes="border">
               <StackPanel Spacing="10">
                 <TextBlock Text="AnimeJaNai" FontWeight="SemiBold" FontSize="16" />
-                <WrapPanel>
+                <WrapPanel IsVisible="{Binding NotMacFeatures}">
                   <TextBlock Text="Inference engine" Margin="0,0,12,0" VerticalAlignment="Center" />
                   <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TensorRtSelected}" Content="TensorRT" Command="{Binding AnimeJaNaiConf.UserSelectTensorRt}" IsEnabled="{Binding TrtSelectable}" />
                   <ToggleButton IsChecked="{Binding AnimeJaNaiConf.VulkanSelected}" Content="Vulkan" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding VulkanSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectVulkan}" />
@@ -221,7 +221,34 @@
                   <ToggleButton IsChecked="{Binding AnimeJaNaiConf.OpenVinoSelected}" Content="OpenVINO" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding OpenVinoSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectOpenVino}" />
                   <ToggleButton IsChecked="{Binding AnimeJaNaiConf.DirectMlSelected}" Content="DirectML" IsEnabled="{Binding WindowsFeatures}" Command="{Binding AnimeJaNaiConf.UserSelectDirectMl}" />
                 </WrapPanel>
-                <TextBlock Classes="help" Text="Engines that this GPU cannot use are greyed. TensorRT: NVIDIA. DirectML: Windows. Vulkan: Linux, any GPU. MIGraphX (AMD on ROCm) and OpenVINO (Intel): Linux, experimental. Choose the startup profile in Profiles; restart playback after changing the engine." />
+                <StackPanel Name="AppleSettingsPanel" IsVisible="{Binding MacFeatures}" Spacing="10">
+                  <WrapPanel>
+                    <TextBlock Text="Inference engine" Width="200" VerticalAlignment="Center" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleOrtSelected}" Content="Core ML (ONNX Runtime)" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleCoreMlSelected}" Content="Core ML (native)" IsEnabled="{Binding AppleCoreMlSelectable}" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleMetalSelected}" Content="Metal" IsEnabled="{Binding AppleMetalSelectable}" />
+                  </WrapPanel>
+                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="Three engines run the same models. Core ML (ONNX Runtime) is the first one shipped. Core ML (native) gives Core ML the pictures directly, as 8-bit images. Metal runs the network on the GPU without Core ML. Run Benchmarks measures all three on this Mac." />
+                  <WrapPanel>
+                    <TextBlock Text="Compute target" Width="200" VerticalAlignment="Center" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceAuto}" Content="Auto" IsEnabled="{Binding AnimeJaNaiConf.AppleDeviceChoice}" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceGpu}" Content="GPU" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceNpu}" Content="Neural Engine (NPU)" IsEnabled="{Binding AnimeJaNaiConf.AppleDeviceChoice}" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceCpu}" Content="CPU" IsEnabled="{Binding AnimeJaNaiConf.AppleDeviceChoice}" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceGpuNpu}" Content="GPU + Neural Engine" />
+                  </WrapPanel>
+                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="{Binding AnimeJaNaiConf.AppleDeviceNote}" />
+                  <WrapPanel>
+                    <TextBlock Text="Reuse unchanged pictures" Width="200" VerticalAlignment="Center" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.EngineReuseOff}" Content="Off" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.EngineReuseFrame}" Content="Whole frames" />
+                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.EngineReuseTiles}" Content="Areas of the frame" />
+                  </WrapPanel>
+                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="Anime holds a drawing for several frames and often moves only part of the picture. Whole frames: a frame identical to the last computed one keeps its result. Areas of the frame: the picture is cut in four tiles and only the tiles that changed are computed (a little more work when everything moves)." />
+                  <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.AppleAutoProfile}" Content="Move to a lighter profile when this Mac cannot keep up with the video" />
+                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="The player measures the time spent on each frame and remembers the profile this Mac holds; Ctrl+R in the player forgets it and measures again, Ctrl+J shows the timings and where the model runs. Choose the startup profile in Profiles. RIFE interpolation is not available with these engines yet." />
+                </StackPanel>
+                <TextBlock Classes="help" IsVisible="{Binding NotMacFeatures}" Text="Engines that this GPU cannot use are greyed. TensorRT: NVIDIA. DirectML: Windows. Vulkan: Linux, any GPU. MIGraphX (AMD on ROCm) and OpenVINO (Intel): Linux, experimental. Choose the startup profile in Profiles; restart playback after changing the engine." />
                 <TextBlock TextWrapping="Wrap" Foreground="Orange" IsVisible="{Binding HasBackendNotice}" Text="{Binding BackendNotice}" />
               </StackPanel>
             </Border>
@@ -255,14 +282,14 @@
                     <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding Oled}" Content="This display is OLED" ToolTip.Tip="Enable only for a confirmed OLED display. The graphics card does not identify the panel technology." />
                   </StackPanel>
                 </StackPanel>
-                <StackPanel IsVisible="{Binding LinuxFeatures}" Spacing="8">
+                <StackPanel IsVisible="{Binding HdrOutputChoice}" Spacing="8">
                   <WrapPanel>
-                    <TextBlock Text="Wayland output" Width="150" VerticalAlignment="Center" />
-                    <ToggleButton IsChecked="{Binding HdrSettings.LinuxAuto}" Content="Follow system" />
+                    <TextBlock Text="{Binding HdrOutputLabel}" Width="150" VerticalAlignment="Center" />
+                    <ToggleButton IsChecked="{Binding HdrSettings.LinuxAuto}" Content="{Binding HdrOutputAutoLabel}" />
                     <ToggleButton IsChecked="{Binding HdrSettings.LinuxSdr}" Content="SDR" />
                     <ToggleButton IsChecked="{Binding HdrSettings.LinuxPq}" Content="HDR PQ" />
                   </WrapPanel>
-                  <TextBlock Classes="help" Text="Auto follows the compositor. Enable HDR in the desktop settings (GNOME, KDE) on a compatible display; grading requires negotiated PQ output. Ctrl+Alt+H shows the output diagnosis." />
+                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="4" Text="{Binding HdrOutputHelp}" />
                 </StackPanel>
                 <TextBlock Classes="help" Text="Auto uses display information available to the player. Choose Manual only with a measured or calibrated peak. Ctrl+Alt+P opens the HDR calibration pattern." />
               </StackPanel>
@@ -282,7 +309,7 @@
                 <TextBlock Classes="help" Text="New installs use Natural. SDR stays SDR while system HDR is off. Ctrl+G compares the configured grade, Natural and grading off." />
                 <Expander Header="Adjust HDR appearance" Name="HdrAppearanceExpander" IsExpanded="False" HorizontalAlignment="Stretch">
                   <StackPanel Spacing="12" Margin="0,12,0,0">
-                    <WrapPanel>
+                    <WrapPanel IsVisible="{Binding NotMacFeatures}">
                       <TextBlock Text="Conversion engine" Width="180" VerticalAlignment="Center" />
                       <ToggleButton IsChecked="{Binding HdrSettings.BackendAuto}" Content="Auto" />
                       <ToggleButton IsChecked="{Binding HdrSettings.BackendRtx}" Content="RTX Video HDR" IsEnabled="{Binding RtxHdrSelectable}" />
@@ -333,7 +360,7 @@
               </StackPanel>
             </Border>
 
-            <Expander Header="Playback and rendering" Name="PlaybackSettingsExpander" IsExpanded="False" HorizontalAlignment="Stretch">
+            <Expander Header="Playback and rendering" Name="PlaybackSettingsExpander" IsExpanded="False" HorizontalAlignment="Stretch" IsVisible="{Binding NotMacFeatures}">
               <StackPanel Spacing="12" Margin="10,12">
                 <WrapPanel>
                   <TextBlock Text="Final scaling" Width="150" VerticalAlignment="Center" />
@@ -382,6 +409,7 @@
               </StackPanel>
             </Expander>
 
+            <StackPanel IsVisible="{Binding NotMacFeatures}">
             <Expander Header="TensorRT engine settings" Name="EngineSettingsExpander" IsVisible="{Binding AnimeJaNaiConf.TensorRtSelected}" IsExpanded="False" HorizontalAlignment="Stretch">
               <StackPanel Spacing="12" Margin="10,12">
                 <WrapPanel>
@@ -405,6 +433,7 @@
                 <TextBox Text="{Binding AnimeJaNaiConf.TrtEngineSettings}" TextWrapping="Wrap" AcceptsReturn="True" />
               </StackPanel>
             </Expander>
+            </StackPanel>
 
             <Expander Header="Diagnostics" Name="DiagnosticsExpander" IsExpanded="False" HorizontalAlignment="Stretch">
               <StackPanel Margin="10,12" Spacing="10">
@@ -778,7 +807,7 @@
 
                                 <TextBlock Margin="10,0,0,10" TextWrapping="Wrap" Foreground="Orange"
                                            IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).RifeMissing}"
-                                           Text="RIFE models are not installed. Install them from the Components tab to use interpolation." />
+                                           Text="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).RifeMissingNote}" />
 
                                 <Grid ColumnDefinitions="Auto,*" Margin="10,10,0,10" IsVisible="{Binding EnableRife}">
                                   <StackPanel Grid.Column="0" Orientation="Horizontal">
@@ -857,7 +886,7 @@
   </Grid>
   </TabItem>
 
-  <TabItem Header="Components">
+  <TabItem Header="Components" IsVisible="{Binding NotMacFeatures}">
     <ScrollViewer HorizontalScrollBarVisibility="Disabled">
       <StackPanel Margin="24" Spacing="12" MaxWidth="820" HorizontalAlignment="Left">
         <TextBlock Text="{Binding ComponentManager.GpuText}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>

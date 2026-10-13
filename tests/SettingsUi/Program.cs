@@ -12,7 +12,18 @@ using ReactiveUI.Avalonia;
 
 string data = Path.Combine(Path.GetTempPath(), "ajn-settings-ui-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(Path.Combine(data, "onnx"));
-File.WriteAllText(Path.Combine(data, "animejanai.conf"), "[global]\nconfig_version=3\nbackend=Vulkan\ndefault_slot=1\n[slot_1]\nprofile_name=Performance\nchain_1_rife=no\n");
+// Before the first use of the view model: its folders are read once from the environment.
+Environment.SetEnvironmentVariable("ANIMEJANAI_DATA_DIR", data);
+// AJN_UI_PLATFORM=macos: the macOS layout, on whatever machine runs the test.
+bool describeMac = Environment.GetEnvironmentVariable("AJN_UI_PLATFORM") == "macos";
+if (describeMac) MainWindowViewModel.Platform = MainWindowViewModel.Os.MacOS;
+bool mac = MainWindowViewModel.OnMac;
+if (mac)
+    foreach (string file in new[] { "perf.onnx", "perf.coreml.onnx", "perf.ajm", "perf.mlpatch" })
+        File.WriteAllText(Path.Combine(data, "onnx", file), "fixture");
+File.WriteAllText(Path.Combine(data, "animejanai.conf"), mac
+    ? "[global]\nconfig_version=3\nbackend=Metal\napple_device=GPU\ndefault_slot=1\n[slot_1]\nprofile_name=Performance\nchain_1_model_1_name=perf\nchain_1_rife=no\n"
+    : "[global]\nconfig_version=3\nbackend=Vulkan\ndefault_slot=1\n[slot_1]\nprofile_name=Performance\nchain_1_rife=no\n");
 Environment.SetEnvironmentVariable("ANIMEJANAI_DATA_DIR", data);
 try
 {
@@ -28,6 +39,31 @@ try
         Console.WriteLine("PASS " + label);
     }
     Check("one display panel", window.FindControl<Border>("DisplaySettingsPanel") is not null);
+    ToggleButton Named(string content) => window.GetVisualDescendants().OfType<ToggleButton>().First(button => Equals(button.Content, content));
+    if (mac)
+    {
+        var apple = window.FindControl<StackPanel>("AppleSettingsPanel")!;
+        Check("Apple Silicon settings shown", apple.IsEffectivelyVisible && Named("Metal").IsEffectivelyVisible);
+        Check("engines of other platforms hidden", !Named("TensorRT").IsEffectivelyVisible && !Named("DirectML").IsEffectivelyVisible);
+        Check("Metal read from the bank", Named("Metal").IsChecked == true && Named("Core ML (native)").IsChecked == false && Named("Core ML (ONNX Runtime)").IsChecked == false);
+        Check("Metal: GPU selected, the other single targets greyed",
+            Named("GPU").IsChecked == true && !Named("Neural Engine (NPU)").IsEnabled && !Named("CPU").IsEnabled && !Named("Auto").IsEnabled && Named("GPU + Neural Engine").IsEnabled);
+        Named("Core ML (native)").IsChecked = true; Dispatcher.UIThread.RunJobs();
+        Check("choosing Core ML (native) reaches the settings", vm.AnimeJaNaiConf.AppleEngine == "CoreMLNative" && Named("Metal").IsChecked == false);
+        Check("Core ML: every compute target can be chosen", Named("Neural Engine (NPU)").IsEnabled && Named("CPU").IsEnabled && Named("Auto").IsEnabled);
+        Named("Neural Engine (NPU)").IsChecked = true; Dispatcher.UIThread.RunJobs();
+        Named("Areas of the frame").IsChecked = true; Dispatcher.UIThread.RunJobs();
+        string saved = File.ReadAllText(Path.Combine(data, "animejanai.conf"));
+        Check("engine, target and reuse are saved for the player", vm.AnimeJaNaiConf.AppleDevice == "NPU" && Named("GPU").IsChecked == false
+            && saved.Contains("backend=CoreMLNative") && saved.Contains("apple_device=NPU") && saved.Contains("engine_reuse=tiles"));
+        Named("GPU + Neural Engine").IsChecked = true; Dispatcher.UIThread.RunJobs();
+        Named("Metal").IsChecked = true; Dispatcher.UIThread.RunJobs();
+        Check("the pair GPU + Neural Engine is kept when moving to Metal", vm.AnimeJaNaiConf.AppleEngine == "Metal" && vm.AnimeJaNaiConf.AppleDevice == "GPU+NPU");
+        Check("nothing of the component packs or the other platforms is offered",
+            window.GetVisualDescendants().OfType<TabItem>().All(tab => !Equals(tab.Header, "Components") || !tab.IsVisible)
+            && window.FindControl<Expander>("PlaybackSettingsExpander")?.IsVisible == false
+            && !window.FindControl<Expander>("EngineSettingsExpander")!.IsEffectivelyVisible);
+    }
     foreach (string name in new[] { "HdrAppearanceExpander", "PlaybackSettingsExpander", "EngineSettingsExpander", "DiagnosticsExpander" })
         Check(name + " initially collapsed", window.FindControl<Expander>(name)?.IsExpanded == false);
     var automatic = window.GetVisualDescendants().OfType<ToggleButton>()
@@ -49,8 +85,8 @@ try
     var advanced = window.FindControl<Expander>("HdrAppearanceExpander")!;
     advanced.IsExpanded = true; Dispatcher.UIThread.RunJobs();
     ToggleButton Toggle(string content) => window.GetVisualDescendants().OfType<ToggleButton>().First(button => Equals(button.Content, content));
-    Check("RTX Video HDR follows the NVIDIA detection", Toggle("RTX Video HDR").IsEnabled == vm.RtxHdrSelectable);
-    if (OperatingSystem.IsLinux())
+    if (!mac) Check("RTX Video HDR follows the NVIDIA detection", Toggle("RTX Video HDR").IsEnabled == vm.RtxHdrSelectable);
+    if (OperatingSystem.IsLinux() && !mac)
     {
         Check("MIGraphX follows the AMD detection", Toggle("MIGraphX").IsEnabled == vm.MiGraphXSelectable);
         Check("OpenVINO follows the Intel detection", Toggle("OpenVINO").IsEnabled == vm.OpenVinoSelectable);
@@ -68,19 +104,19 @@ try
     window.Width = 780; Dispatcher.UIThread.RunJobs();
     using (var frame = window.CaptureRenderedFrame()) frame!.Save(Path.ChangeExtension(output, ".narrow.png"));
     Check("small window keeps display controls inside client width", oled.TranslatePoint(new Point(oled.Bounds.Width, 0), window)?.X <= window.ClientSize.Width);
-    if (OperatingSystem.IsLinux())
+    if (!OperatingSystem.IsWindows())
     {
-        // "Run Benchmarks" on Linux: the launcher's output must reach the progress window.
+        // "Run Benchmarks" on Linux and macOS: the launcher's output must reach the progress window.
         Directory.CreateDirectory(Path.Combine(data, "benchmarks"));
         File.WriteAllText(Path.Combine(data, "benchmarks", "animejanai_benchmark_all.sh"),
             "#!/bin/sh\nprintf 'Performance @ 1280x720 '\nsleep 1\necho '123.4 fps'\necho 'to stderr' >&2\n");
         typeof(MainWindow).GetMethod("ShowBenchmarkWindow", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-            .Invoke(window, null);
+            .Invoke(window, new object?[] { null });
         string shown = "";
         for (int i = 0; i < 300 && !shown.Contains("Finished"); i++)
         {
             Thread.Sleep(100); Dispatcher.UIThread.RunJobs();
-            var progress = window.OwnedWindows.FirstOrDefault(w => w.Title == "AnimeJaNai playback benchmark");
+            var progress = window.OwnedWindows.FirstOrDefault(w => w.Title == (mac ? "AnimeJaNai engine benchmark" : "AnimeJaNai playback benchmark"));
             shown = (progress?.Content as TextBox)?.Text ?? "";
         }
         Check("benchmark output shown live, with errors and the end", shown.Contains("Performance @ 1280x720 123.4 fps") && shown.Contains("to stderr") && shown.Contains("Finished"));

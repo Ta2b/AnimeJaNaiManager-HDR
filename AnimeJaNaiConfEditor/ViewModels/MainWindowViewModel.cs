@@ -50,26 +50,50 @@ namespace AnimeJaNaiConfEditor.ViewModels
 
             RefreshComponentAwareness();
             ComponentManager.Refreshed += RefreshComponentAwareness;
-            _ = InitializeComponentManagerAsync();
+            // macOS has no downloadable components: everything is in the application.
+            if (!OnMac) _ = InitializeComponentManagerAsync();
         }
 
         // ---- component awareness for the Profiles tab -------------------------------------
         // Install state comes from the disk (works offline); GPU identity comes from the
         // component engine once its refresh completes.
 
-        public bool WindowsFeatures => OperatingSystem.IsWindows();
-        public bool LinuxFeatures => OperatingSystem.IsLinux();
+        // The platform the settings are for. The tests describe another one than they run on.
+        public enum Os { Windows, Linux, MacOS }
+        public static Os Platform { get; set; } =
+            OperatingSystem.IsWindows() ? Os.Windows : OperatingSystem.IsMacOS() ? Os.MacOS : Os.Linux;
+        public static bool OnWindows => Platform == Os.Windows;
+        public static bool OnLinux => Platform == Os.Linux;
+        public static bool OnMac => Platform == Os.MacOS;
+        public bool WindowsFeatures => OnWindows;
+        public bool LinuxFeatures => OnLinux;
+        public bool MacFeatures => OnMac;
+        public bool NotMacFeatures => !OnMac;
+        // HDR output request (linux_hdr_output): Wayland on Linux, EDR on macOS.
+        public bool HdrOutputChoice => OnLinux || OnMac;
+        public bool ShowDefaultProfileList => !OnMac;   // built-in slots 1001-1003: not bound on macOS
+        public string HdrOutputLabel => OnMac ? "HDR output" : "Wayland output";
+        public string HdrOutputAutoLabel => OnMac ? "Follow video" : "Follow system";
+        public string BenchmarkDescription => OnMac
+            ? "Measure the three engines on each processor of this Mac (GPU, Neural Engine, both) and rank them. It runs offscreen; close the player and leave the Mac idle meanwhile."
+            : "Measure your real playback fps (the speed you will actually get) at several resolutions. Close the player and leave the computer idle while it runs. The first run builds a TensorRT engine per resolution.";
+        public string HdrOutputHelp => OnMac
+            ? "Follow video keeps SDR video in SDR and HDR video in HDR. HDR PQ converts SDR video to HDR: for an XDR or other HDR display. Ctrl+H in the player switches the conversion, Ctrl+I shows the output diagnosis."
+            : "Auto follows the compositor. Enable HDR in the desktop settings (GNOME, KDE) on a compatible display; grading requires negotiated PQ output. Ctrl+Alt+H shows the output diagnosis.";
+        public string RifeMissingNote => OnMac
+            ? "RIFE interpolation is not available with the Apple engines yet."
+            : "RIFE models are not installed. Install them from the Components tab to use interpolation.";
         private string _expectedHash = "";
         private string _expectedBank = "";
         private readonly object _profileSaveLock = new();
         public static bool TrtOnDisk() => File.Exists(Path.Combine(
             Environment.GetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR") ?? Path.Combine(DataDir, "inference"),
-            OperatingSystem.IsLinux() ? "libnvinfer.so.11" : "nvinfer_11.dll"));
+            OnLinux ? "libnvinfer.so.11" : "nvinfer_11.dll"));
 
-        public static bool VulkanOnDisk() => OperatingSystem.IsLinux() && File.Exists(Path.Combine(
+        public static bool VulkanOnDisk() => OnLinux && File.Exists(Path.Combine(
             Environment.GetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR") ?? Path.Combine(DataDir, "inference"), "libaji_vulkan.so"));
         // The ONNX Runtime engine; the vendor provider itself is only known at playback.
-        public static bool OnnxRuntimeOnDisk() => OperatingSystem.IsLinux() && File.Exists(Path.Combine(
+        public static bool OnnxRuntimeOnDisk() => OnLinux && File.Exists(Path.Combine(
             Environment.GetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR") ?? Path.Combine(DataDir, "inference"), "libaji_ort.so"));
         private bool _onnxRuntimeSelectable;
         public bool OnnxRuntimeSelectable { get => _onnxRuntimeSelectable; set => this.RaiseAndSetIfChanged(ref _onnxRuntimeSelectable, value); }
@@ -176,8 +200,35 @@ namespace AnimeJaNaiConfEditor.ViewModels
             set => this.RaiseAndSetIfChanged(ref _amfSelectable, value);
         }
 
+        // macOS: which engines have their model files (the application ships them next to the
+        // ONNX files: NAME.mlpackage + NAME.mlpatch for Core ML, NAME.ajm for Metal).
+        private bool _appleCoreMlSelectable = true;
+        public bool AppleCoreMlSelectable { get => _appleCoreMlSelectable; set => this.RaiseAndSetIfChanged(ref _appleCoreMlSelectable, value); }
+        private bool _appleMetalSelectable = true;
+        public bool AppleMetalSelectable { get => _appleMetalSelectable; set => this.RaiseAndSetIfChanged(ref _appleMetalSelectable, value); }
+
+        private static bool AnyModelFile(string pattern) =>
+            Directory.Exists(Path.Combine(DataDir, "onnx")) && Directory.EnumerateFileSystemEntries(Path.Combine(DataDir, "onnx"), pattern).Any();
+
         public void RefreshComponentAwareness()
         {
+            if (OnMac)
+            {
+                // Apple Silicon: no TensorRT, DirectML, Vulkan, RTX Video, AMF or Smooth Motion,
+                // and no component packs. RIFE does not exist in the Apple engines yet.
+                TrtSelectable = false; VulkanSelectable = false; OnnxRuntimeSelectable = false;
+                MiGraphXSelectable = false; OpenVinoSelectable = false;
+                RtxHdrSelectable = false; RtxVsrSelectable = false; AmfSelectable = false; SmoothMotionSelectable = false;
+                AppleCoreMlSelectable = AnyModelFile("*.mlpatch");
+                AppleMetalSelectable = AnyModelFile("*.ajm");
+                AnimeJaNaiConf.BackendAutoFallback = false;
+                RifeMissing = true;
+                BackendNotice = AnimeJaNaiConf.AppleEngine == "Metal" && !AppleMetalSelectable ? "The Metal model files are missing from this installation."
+                    : AnimeJaNaiConf.AppleEngine == "CoreMLNative" && !AppleCoreMlSelectable ? "The Core ML model files are missing from this installation."
+                    : "";
+                RefreshBackendModelLists();
+                return;
+            }
             bool trtInstalled = TrtOnDisk();
             bool? nvidia = ComponentManager.GpuNvidia;
             // Windows only tells NVIDIA from the rest; Linux lists every adapter.
@@ -481,14 +532,24 @@ chain_2_rife=no";
         // writable data lives under $XDG_DATA_HOME/AnimeJaNai.
         public static string DataDir { get; } = Path.GetFullPath(
             Environment.GetEnvironmentVariable("ANIMEJANAI_DATA_DIR") is { Length: > 0 } dd ? dd
+            : MacUserFolder is { } mac ? Path.Combine(mac, "animejanai")
             : AtInstallRoot ? Path.Combine(AppContext.BaseDirectory, "animejanai")
             : AppContext.BaseDirectory);
 
         // install root: player, AnimeJaNaiUpdater, portable_config/
         public static string RootDir { get; } = Path.GetFullPath(
             Environment.GetEnvironmentVariable("ANIMEJANAI_ROOT") is { Length: > 0 } rd ? rd
+            : MacUserFolder is { } mac ? mac
             : AtInstallRoot ? AppContext.BaseDirectory
             : Path.Combine(AppContext.BaseDirectory, ".."));
+
+        // macOS, Manager opened from its application without the player (which otherwise gives
+        // the two folders above in the environment): the folder the player's launcher keeps,
+        // ~/Library/Application Support/AnimeJaNai. An application is read-only once installed.
+        private static string? MacUserFolder =>
+            OperatingSystem.IsMacOS() && AppContext.BaseDirectory.Contains(".app/Contents/MacOS", StringComparison.Ordinal)
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "AnimeJaNai")
+                : null;
 
         public string BackupPath => Path.Combine(DataDir, "backups");
 
@@ -703,6 +764,20 @@ chain_2_rife=no";
 
         public AvaloniaList<string> GetAllModels()
         {
+            // No models folder yet (macOS: the Manager opened before the player ever ran).
+            if (!Directory.Exists(OnnxPath)) return new AvaloniaList<string>();
+            if (OnMac)
+            {
+                // NAME.coreml.onnx is a variant of NAME.onnx made for the ONNX Runtime engine, not a
+                // model of its own. The two native engines only run the models converted for them.
+                string engine = AnimeJaNaiConf?.AppleEngine ?? "CoreML";
+                return new AvaloniaList<string>(Directory.GetFiles(OnnxPath, "*.onnx")
+                    .Select(filename => Path.GetFileNameWithoutExtension(filename))
+                    .Where(name => !name.EndsWith(".coreml", StringComparison.OrdinalIgnoreCase))
+                    .Where(name => engine == "Metal" ? File.Exists(Path.Combine(OnnxPath, name + ".ajm"))
+                        : engine != "CoreMLNative" || File.Exists(Path.Combine(OnnxPath, name + ".mlpatch")))
+                    .Order().ToList());
+            }
             return new AvaloniaList<string>(Directory.GetFiles(OnnxPath).Where(filename => Path.GetExtension(filename).Equals(".onnx", StringComparison.CurrentCultureIgnoreCase))
                 .Where(filename => AnimeJaNaiConf?.VulkanSelected != true ||
                     (File.Exists(Path.ChangeExtension(filename, ".ncnn.param")) && File.Exists(Path.ChangeExtension(filename, ".ncnn.bin"))))
@@ -914,6 +989,12 @@ chain_2_rife=no";
                         break;
                 }
             }
+
+            // Apple Silicon engine settings. Unknown values fall back to the defaults.
+            animeJaNaiConf.SetAppleEngine(parser.GetValue("global", "backend", "CoreML"));
+            animeJaNaiConf.SetAppleDevice(parser.GetValue("global", "apple_device", "AUTO"));
+            animeJaNaiConf.SetEngineReuse(parser.GetValue("global", "engine_reuse", "frame"));
+            animeJaNaiConf.AppleAutoProfile = ParseBool(parser.GetValue("global", "apple_auto_profile", "yes"));
 
             if (int.TryParse(parser.GetValue("global", "default_slot", ""), out var defaultSlot))
             {
@@ -1215,8 +1296,15 @@ chain_2_rife=no";
             var parser = new ConfigParser();
 
             parser.SetValue("global", "config_version", CONFIG_VERSION.ToString());
-            parser.SetValue("global", "backend", conf.SelectedBackend.ToString());
+            parser.SetValue("global", "backend", OnMac ? conf.AppleEngine : conf.SelectedBackend.ToString());
             parser.SetValue("global", "backend_auto_fallback", conf.BackendAutoFallback ? "yes" : "no");
+            if (OnMac)
+            {
+                // Read by the player's script (device, automatic profile) and by the engine (reuse).
+                parser.SetValue("global", "apple_device", conf.AppleDevice);
+                parser.SetValue("global", "engine_reuse", conf.EngineReuse);
+                parser.SetValue("global", "apple_auto_profile", conf.AppleAutoProfile ? "yes" : "no");
+            }
             parser.SetValue("global", "logging", conf.EnableLogging ? "yes" : "no");
             // Write-minimal: only persist default_slot when the user picked one (absent => the vf
             // line's baked-in Balanced slot applies).
@@ -1413,7 +1501,7 @@ chain_2_rife=no";
         {
             await Task.Run(() =>
             {
-                Process.Start(new ProcessStartInfo(OperatingSystem.IsWindows() ? "explorer.exe" : "xdg-open") { ArgumentList = { OnnxPath }, UseShellExecute = false });
+                Process.Start(new ProcessStartInfo(OperatingSystem.IsWindows() ? "explorer.exe" : OperatingSystem.IsMacOS() ? "open" : "xdg-open") { ArgumentList = { OnnxPath }, UseShellExecute = false });
             });
         }
 
@@ -1525,6 +1613,16 @@ chain_2_rife=no";
                 this.WhenAnyValue(
                     x => x.MiGraphXSelected,
                     x => x.OpenVinoSelected).Subscribe(x =>
+                    {
+                        Vm?.WriteAnimeJaNaiConf();
+                    });
+
+                // Apple Silicon engine settings.
+                this.WhenAnyValue(
+                    x => x.AppleEngine,
+                    x => x.AppleDevice,
+                    x => x.EngineReuse,
+                    x => x.AppleAutoProfile).Subscribe(x =>
                     {
                         Vm?.WriteAnimeJaNaiConf();
                     });
@@ -1796,6 +1894,114 @@ chain_2_rife=no";
             }
         }
 
+        // ---- Apple Silicon ([global] backend, apple_device, engine_reuse, apple_auto_profile) ----
+        // Three engines run the same models: Core ML through ONNX Runtime ("CoreML", the first one
+        // shipped), Core ML alone ("CoreMLNative") and Metal ("Metal").
+        public static readonly string[] AppleEngines = ["CoreML", "CoreMLNative", "Metal"];
+        // AUTO = Core ML chooses; NPU = the Neural Engine; GPU+NPU = both on one frame.
+        public static readonly string[] AppleDevices = ["AUTO", "GPU", "NPU", "CPU", "GPU+NPU"];
+
+        private string _appleEngine = "CoreML";
+        [DataMember]
+        public string AppleEngine
+        {
+            get => _appleEngine;
+            private set
+            {
+                this.RaiseAndSetIfChanged(ref _appleEngine, value);
+                this.RaisePropertyChanged(nameof(AppleOrtSelected));
+                this.RaisePropertyChanged(nameof(AppleCoreMlSelected));
+                this.RaisePropertyChanged(nameof(AppleMetalSelected));
+                this.RaisePropertyChanged(nameof(AppleDeviceChoice));
+                this.RaisePropertyChanged(nameof(AppleDeviceNote));
+            }
+        }
+        public bool AppleOrtSelected { get => AppleEngine == "CoreML"; set { if (value) UserSelectAppleEngine("CoreML"); else this.RaisePropertyChanged(); } }
+        public bool AppleCoreMlSelected { get => AppleEngine == "CoreMLNative"; set { if (value) UserSelectAppleEngine("CoreMLNative"); else this.RaisePropertyChanged(); } }
+        public bool AppleMetalSelected { get => AppleEngine == "Metal"; set { if (value) UserSelectAppleEngine("Metal"); else this.RaisePropertyChanged(); } }
+
+        public void SetAppleEngine(string? value)
+        {
+            string wanted = (value ?? "").Trim();
+            AppleEngine = AppleEngines.FirstOrDefault(e => e.Equals(wanted, StringComparison.OrdinalIgnoreCase)) ?? "CoreML";
+            SetAppleDevice(AppleDevice);
+        }
+
+        public void UserSelectAppleEngine(string engine)
+        {
+            SetAppleEngine(engine);
+            Vm?.RefreshComponentAwareness();
+        }
+
+        private string _appleDevice = "AUTO";
+        [DataMember]
+        public string AppleDevice
+        {
+            get => _appleDevice;
+            private set
+            {
+                this.RaiseAndSetIfChanged(ref _appleDevice, value);
+                foreach (string name in new[] { nameof(AppleDeviceAuto), nameof(AppleDeviceGpu), nameof(AppleDeviceNpu), nameof(AppleDeviceCpu), nameof(AppleDeviceGpuNpu), nameof(AppleDeviceNote) })
+                    this.RaisePropertyChanged(name);
+            }
+        }
+
+        // Metal is the GPU: its only choices are the GPU alone, or the GPU with the Neural Engine
+        // (reached through Core ML). The two Core ML engines take every target.
+        public bool AppleDeviceChoice => AppleEngine != "Metal";
+        public static string NormalizeAppleDevice(string engine, string? value)
+        {
+            string wanted = (value ?? "").Trim().ToUpperInvariant().Replace(" ", "");
+            wanted = wanted switch { "ALL" or "" => "AUTO", "ANE" => "NPU", "GPU+ANE" or "ANE+GPU" or "NPU+GPU" => "GPU+NPU", _ => wanted };
+            if (!AppleDevices.Contains(wanted)) wanted = "AUTO";
+            if (engine == "Metal" && wanted != "GPU+NPU") wanted = "GPU";
+            return wanted;
+        }
+        public void SetAppleDevice(string? value) => AppleDevice = NormalizeAppleDevice(AppleEngine, value);
+        public bool AppleDeviceAuto { get => AppleDevice == "AUTO"; set { if (value) SetAppleDevice("AUTO"); else this.RaisePropertyChanged(); } }
+        public bool AppleDeviceGpu { get => AppleDevice == "GPU"; set { if (value) SetAppleDevice("GPU"); else this.RaisePropertyChanged(); } }
+        public bool AppleDeviceNpu { get => AppleDevice == "NPU"; set { if (value) SetAppleDevice("NPU"); else this.RaisePropertyChanged(); } }
+        public bool AppleDeviceCpu { get => AppleDevice == "CPU"; set { if (value) SetAppleDevice("CPU"); else this.RaisePropertyChanged(); } }
+        public bool AppleDeviceGpuNpu { get => AppleDevice == "GPU+NPU"; set { if (value) SetAppleDevice("GPU+NPU"); else this.RaisePropertyChanged(); } }
+        public string AppleDeviceNote => (AppleEngine, AppleDevice) switch
+        {
+            ("Metal", "GPU+NPU") => "Metal on the GPU and Core ML on the Neural Engine share the tiles of each frame.",
+            ("Metal", _) => "The whole network runs on the GPU through Metal.",
+            (_, "AUTO") => "Core ML decides where each operation runs.",
+            (_, "GPU") => "Core ML on the GPU (the CPU remains its fallback for an operation the GPU cannot run).",
+            (_, "NPU") => "Core ML on the Neural Engine (the CPU remains its fallback).",
+            (_, "CPU") => "Core ML on the CPU only: for comparison, far slower.",
+            _ => "The GPU and the Neural Engine share the tiles of each frame: each takes the next tile when it is free.",
+        };
+
+        // What is not recomputed: nothing, a frame identical to the last computed one (anime holds
+        // a drawing for several frames), or each tile of the picture that did not change.
+        private string _engineReuse = "frame";
+        [DataMember]
+        public string EngineReuse
+        {
+            get => _engineReuse;
+            private set
+            {
+                this.RaiseAndSetIfChanged(ref _engineReuse, value);
+                foreach (string name in new[] { nameof(EngineReuseOff), nameof(EngineReuseFrame), nameof(EngineReuseTiles) })
+                    this.RaisePropertyChanged(name);
+            }
+        }
+        public void SetEngineReuse(string? value)
+        {
+            string wanted = (value ?? "").Trim().ToLowerInvariant();
+            EngineReuse = wanted is "off" or "no" or "false" or "0" ? "off" : wanted is "tiles" or "areas" ? "tiles" : "frame";
+        }
+        public bool EngineReuseOff { get => EngineReuse == "off"; set { if (value) SetEngineReuse("off"); else this.RaisePropertyChanged(); } }
+        public bool EngineReuseFrame { get => EngineReuse == "frame"; set { if (value) SetEngineReuse("frame"); else this.RaisePropertyChanged(); } }
+        public bool EngineReuseTiles { get => EngineReuse == "tiles"; set { if (value) SetEngineReuse("tiles"); else this.RaisePropertyChanged(); } }
+
+        // The player moves to a lighter profile when this Mac cannot keep up with the video.
+        private bool _appleAutoProfile = true;
+        [DataMember]
+        public bool AppleAutoProfile { get => _appleAutoProfile; set => this.RaiseAndSetIfChanged(ref _appleAutoProfile, value); }
+
         public void SetTensorRtSelected()
         {
             TensorRtSelected = true;
@@ -1807,7 +2013,7 @@ chain_2_rife=no";
 
         public void SetDirectMlSelected()
         {
-            if (OperatingSystem.IsLinux()) { SetTensorRtSelected(); return; }
+            if (!MainWindowViewModel.OnWindows) { SetTensorRtSelected(); return; }
             DirectMlSelected = true;
             TensorRtSelected = false;
             VulkanSelected = false;
@@ -1817,7 +2023,7 @@ chain_2_rife=no";
 
         public void SetVulkanSelected()
         {
-            if (!OperatingSystem.IsLinux()) { SetTensorRtSelected(); return; }
+            if (!MainWindowViewModel.OnLinux) { SetTensorRtSelected(); return; }
             TensorRtSelected = false;
             DirectMlSelected = false;
             VulkanSelected = true;
@@ -1828,7 +2034,7 @@ chain_2_rife=no";
         // openVino false = MIGraphX. Linux only: Windows keeps DirectML for AMD and Intel.
         public void SetOnnxRuntimeSelected(bool openVino)
         {
-            if (!OperatingSystem.IsLinux()) { SetTensorRtSelected(); return; }
+            if (!MainWindowViewModel.OnLinux) { SetTensorRtSelected(); return; }
             TensorRtSelected = false;
             DirectMlSelected = false;
             VulkanSelected = false;

@@ -14,6 +14,9 @@ try
     string data = Path.Combine(AppContext.BaseDirectory, "fixtures", Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(Path.Combine(data, "onnx"));
     Environment.SetEnvironmentVariable("ANIMEJANAI_DATA_DIR", data);
+    // AJN_UI_PLATFORM=macos: the whole test as on a Mac, on whatever machine runs it. After the
+    // folder above: the view model reads it the first time it is touched.
+    if (Environment.GetEnvironmentVariable("AJN_UI_PLATFORM") == "macos") MainWindowViewModel.Platform = MainWindowViewModel.Os.MacOS;
     File.WriteAllText(Path.Combine(data, "animejanai.conf"),
         "[global]\nconfig_version=2\nbackend=DirectML\ndefault_slot=0\n" +
         "[slot_1]\nprofile_name=Round trip\nchain_1_rife=yes\nchain_1_rife_ensemble=yes\n");
@@ -129,7 +132,7 @@ try
         File.WriteAllText(smoothPath, "# keep\nrife_display_sync=no\n");
         var smooth = new HdrSettings(smoothPath);
         if (smooth.SmoothMotion) throw new Exception("Smooth Motion must be off by default");
-        if (OperatingSystem.IsLinux())
+        if (MainWindowViewModel.OnLinux)
         {
             smooth.SmoothMotion = true; smooth.Save();
             if (!new HdrSettings(smoothPath).SmoothMotion || !File.ReadAllText(smoothPath).Contains("smooth_motion=yes") || !File.ReadAllText(smoothPath).Contains("# keep"))
@@ -138,7 +141,7 @@ try
         Console.WriteLine("PASS GPU-specific options follow the GPUs of the machine");
         Console.WriteLine("PASS Smooth Motion: Linux NVIDIA only, driver layer required, saved and reloaded");
     }
-    if (OperatingSystem.IsLinux())
+    if (MainWindowViewModel.OnLinux)
     {
         vm.AnimeJaNaiConf.UserSelectDirectMl();
         if (vm.AnimeJaNaiConf.DirectMlSelected || vm.RtxVsrSelectable || vm.AmfSelectable)
@@ -190,6 +193,73 @@ try
             Console.WriteLine("PASS Unix socket sends the existing reload message");
         }
         finally { Environment.SetEnvironmentVariable("ANIMEJANAI_IPC_PATH", null); File.Delete(socketPath); }
+    }
+    {
+        // macOS (Apple Silicon) settings, whatever the platform the test runs on.
+        var real = MainWindowViewModel.Platform;
+        MainWindowViewModel.Platform = MainWindowViewModel.Os.MacOS;
+        try
+        {
+            foreach (string file in new[] { "perf.onnx", "perf.coreml.onnx", "perf.ajm", "perf.mlpatch", "custom.onnx" })
+                File.WriteAllText(Path.Combine(data, "onnx", file), "fixture");
+            string N(string engine, string? device) => AnimeJaNaiConf.NormalizeAppleDevice(engine, device);
+            if (N("CoreML", "ALL") != "AUTO" || N("CoreMLNative", "ane") != "NPU" || N("CoreML", "gpu+ane") != "GPU+NPU" || N("CoreML", "") != "AUTO"
+                || N("CoreMLNative", "CPU") != "CPU" || N("CoreML", "bogus") != "AUTO")
+                throw new Exception("Compute target names are not normalised");
+            if (N("Metal", "NPU") != "GPU" || N("Metal", "AUTO") != "GPU" || N("Metal", "CPU") != "GPU" || N("Metal", "GPU+ANE") != "GPU+NPU")
+                throw new Exception("Metal only takes the GPU, alone or with the Neural Engine");
+            Console.WriteLine("PASS macOS compute targets: every target for Core ML, GPU or GPU + Neural Engine for Metal");
+
+            string macPath = Path.Combine(data, "mac.conf");
+            File.WriteAllText(macPath, "# keep me\n[global]\nconfig_version=3\nbackend=CoreML\ndefault_slot=1\nunknown=keep\n" +
+                "[slot_1]\nprofile_name=Mac\nchain_1_model_1_name=perf\nchain_1_rife=no\n");
+            var first = vm.ReadAnimeJaNaiConf(macPath);
+            if (first.AppleEngine != "CoreML" || first.AppleDevice != "AUTO" || first.EngineReuse != "frame" || !first.AppleAutoProfile)
+                throw new Exception("macOS defaults: ONNX Runtime Core ML, automatic target, whole frames reused, automatic profile");
+            File.WriteAllText(macPath, "[global]\nbackend=metal\napple_device=ANE\nengine_reuse=areas\napple_auto_profile=no\n[slot_1]\nprofile_name=Mac\n");
+            var metal = vm.ReadAnimeJaNaiConf(macPath);
+            if (metal.AppleEngine != "Metal" || metal.AppleDevice != "GPU" || metal.EngineReuse != "tiles" || metal.AppleAutoProfile || !metal.AppleMetalSelected || metal.AppleDeviceChoice)
+                throw new Exception("macOS settings are not read: " + metal.AppleEngine + " " + metal.AppleDevice + " " + metal.EngineReuse);
+            Console.WriteLine("PASS macOS engine, compute target, reuse and automatic profile are read with their defaults");
+
+            File.WriteAllText(macPath, "# keep me\n[global]\nconfig_version=3\nbackend=CoreML\nunknown=keep\n[slot_1]\nprofile_name=Mac\n");
+            vm.AnimeJaNaiConf.UserSelectAppleEngine("CoreMLNative");
+            vm.AnimeJaNaiConf.SetAppleDevice("GPU+NPU");
+            vm.AnimeJaNaiConf.SetEngineReuse("tiles");
+            vm.AnimeJaNaiConf.AppleAutoProfile = false;
+            vm.WriteAnimeJaNaiConf(macPath);
+            string written = File.ReadAllText(macPath);
+            foreach (string line in new[] { "backend=CoreMLNative", "apple_device=GPU+NPU", "engine_reuse=tiles", "apple_auto_profile=no", "# keep me", "unknown=keep" })
+                if (!written.Contains(line)) throw new Exception("macOS save lost: " + line + "\n" + written);
+            var again = vm.ReadAnimeJaNaiConf(macPath);
+            if (again.AppleEngine != "CoreMLNative" || again.AppleDevice != "GPU+NPU" || again.EngineReuse != "tiles" || again.AppleAutoProfile)
+                throw new Exception("macOS settings lost at reload");
+            Console.WriteLine("PASS macOS settings survive save and reload, comments and unknown keys kept");
+
+            vm.AnimeJaNaiConf.UserSelectAppleEngine("CoreML");
+            var listed = vm.GetAllModels();
+            if (!listed.Contains("custom") || !listed.Contains("perf") || listed.Any(name => name.EndsWith(".coreml")))
+                throw new Exception("ONNX Runtime lists every ONNX model, never the .coreml variants: " + string.Join(",", listed));
+            vm.AnimeJaNaiConf.UserSelectAppleEngine("CoreMLNative");
+            if (!vm.GetAllModels().SequenceEqual(new[] { "perf" })) throw new Exception("Core ML native lists the models converted for it");
+            vm.AnimeJaNaiConf.SetAppleDevice("NPU");
+            vm.AnimeJaNaiConf.UserSelectAppleEngine("Metal");
+            if (!vm.GetAllModels().SequenceEqual(new[] { "perf" }) || vm.AnimeJaNaiConf.AppleDevice != "GPU")
+                throw new Exception("Metal lists the models converted for it and moves a Core ML target to the GPU");
+            if (vm.TrtSelectable || vm.VulkanSelectable || vm.RtxHdrSelectable || vm.SmoothMotionSelectable || !vm.RifeMissing
+                || !vm.AppleMetalSelectable || !vm.AppleCoreMlSelectable || !vm.MacFeatures || vm.WindowsFeatures || vm.LinuxFeatures)
+                throw new Exception("macOS offered an engine or an option of another platform");
+            Console.WriteLine("PASS macOS model lists follow the engine; engines and options of other platforms are off");
+
+            MainWindowViewModel.Platform = MainWindowViewModel.Os.Linux;
+            string linuxPath = Path.Combine(data, "not-mac.conf");
+            vm.WriteAnimeJaNaiConf(linuxPath);
+            string other = File.ReadAllText(linuxPath);
+            if (other.Contains("apple_device") || other.Contains("backend=Metal") || other.Contains("engine_reuse"))
+                throw new Exception("macOS keys written on another platform");
+            Console.WriteLine("PASS other platforms do not write the macOS keys");
+        }
+        finally { MainWindowViewModel.Platform = real; }
     }
     return 0;
 }

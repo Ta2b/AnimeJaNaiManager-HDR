@@ -24,6 +24,8 @@ jobs:
             rid: win-x64
           - os: ubuntu-24.04
             rid: linux-x64
+          - os: macos-15
+            rid: osx-arm64
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -42,12 +44,25 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.x'
+      # Each test keeps its output: the last step publishes it as annotations when one fails.
       - name: Profile and HDR persistence regressions
-        run: dotnet run --project manager/tests/ProfileRoundTrip/ProfileRoundTrip.csproj
+        shell: bash
+        run: dotnet run --project manager/tests/ProfileRoundTrip/ProfileRoundTrip.csproj 2>&1 | tee profile.log
       - name: Settings UI and rendering regressions
-        run: dotnet run --project manager/tests/SettingsUi -p:RuntimeIdentifier=${{ matrix.rid }} -- artifacts/settings.png
+        shell: bash
+        run: dotnet run --project manager/tests/SettingsUi -p:RuntimeIdentifier=${{ matrix.rid }} -- artifacts/settings.png 2>&1 | tee ui.log
+      - name: The macOS settings and layout, also checked on Linux
+        # The same tests with the platform forced: a change made on Linux that breaks the Mac
+        # layout is seen without waiting for the macOS machine.
+        if: matrix.rid == 'linux-x64'
+        env:
+          AJN_UI_PLATFORM: macos
+        run: |
+          dotnet run --project manager/tests/ProfileRoundTrip/ProfileRoundTrip.csproj 2>&1 | tee profile-as-mac.log
+          dotnet run --project manager/tests/SettingsUi -p:RuntimeIdentifier=linux-x64 -- artifacts/settings-macos.png 2>&1 | tee ui-as-mac.log
       - name: Publish self-contained Manager
-        run: dotnet publish manager/AnimeJaNaiConfEditor/AnimeJaNaiConfEditor.csproj -c Release -r ${{ matrix.rid }} --self-contained true -o publish
+        shell: bash
+        run: dotnet publish manager/AnimeJaNaiConfEditor/AnimeJaNaiConfEditor.csproj -c Release -r ${{ matrix.rid }} --self-contained true -o publish 2>&1 | tee publish.log
       - name: Stage Windows (keep existing asset names)
         if: matrix.rid == 'win-x64'
         shell: pwsh
@@ -64,6 +79,92 @@ jobs:
           cp publish/AnimeJaNaiManager staging/AnimeJaNaiManager-HDR
           cp publish/*.so staging/
           tar --zstd -C staging -cf AnimeJaNaiManager-HDR-linux-x64.tar.zst .
+      - name: Stage macOS as an application
+        # "AnimeJaNai Manager.app": the program and its native libraries, an icon made from the
+        # Windows one, an ad-hoc signature (required on Apple Silicon; not notarized). The player
+        # application carries it in its Resources and opens it with Ctrl+E.
+        if: matrix.rid == 'osx-arm64'
+        run: |
+          app="staging/AnimeJaNai Manager.app"
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+          cp publish/AnimeJaNaiManager "$app/Contents/MacOS/AnimeJaNaiManager-HDR"
+          cp publish/*.dylib "$app/Contents/MacOS/"
+          chmod +x "$app/Contents/MacOS/AnimeJaNaiManager-HDR"
+          icon=""
+          if sips -s format png manager/AnimeJaNaiConfEditor/Assets/logo.ico --out logo.png >/dev/null 2>&1; then
+            mkdir logo.iconset
+            for size in 16 32 128 256 512; do
+              sips -z $size $size logo.png --out "logo.iconset/icon_${size}x${size}.png" >/dev/null
+              sips -z $((size * 2)) $((size * 2)) logo.png --out "logo.iconset/icon_${size}x${size}@2x.png" >/dev/null
+            done
+            if iconutil -c icns logo.iconset -o "$app/Contents/Resources/AppIcon.icns"; then icon="<key>CFBundleIconFile</key><string>AppIcon</string>"; fi
+          fi
+          [ -n "$icon" ] || echo "::warning title=manager icon::no icon could be made from logo.ico"
+          cat > "$app/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key><string>AnimeJaNai Manager</string>
+            <key>CFBundleDisplayName</key><string>AnimeJaNai Manager</string>
+            <key>CFBundleIdentifier</key><string>io.github.ta2b.animejanai-manager</string>
+            <key>CFBundleExecutable</key><string>AnimeJaNaiManager-HDR</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+            <key>CFBundleShortVersionString</key><string>0.8.0</string>
+            <key>CFBundleVersion</key><string>${GITHUB_SHA::12}</string>
+            <key>LSMinimumSystemVersion</key><string>14.0</string>
+            <key>LSApplicationCategoryType</key><string>public.app-category.video</string>
+            <key>NSHighResolutionCapable</key><true/>
+            <key>NSPrincipalClass</key><string>NSApplication</string>
+            $icon
+          </dict>
+          </plist>
+          EOF
+          plutil -lint "$app/Contents/Info.plist"
+          codesign --force --deep -s - "$app" 2>&1 | tee sign.log
+          codesign --verify --deep --strict "$app" 2>&1 | tee -a sign.log
+          file "$app/Contents/MacOS/AnimeJaNaiManager-HDR" | tee -a sign.log
+          du -sh "$app"
+      - name: The staged application starts on macOS
+        # With a bank of its own. Proves that the signed program runs, finds its native libraries
+        # and opens its window: a program that fails any of these exits within the first seconds.
+        if: matrix.rid == 'osx-arm64'
+        run: |
+          app="staging/AnimeJaNai Manager.app"
+          data="$RUNNER_TEMP/manager-data"
+          mkdir -p "$data/animejanai/onnx" "$data/portable_config/script-opts"
+          for kind in onnx ajm mlpatch; do : > "$data/animejanai/onnx/2x_Check.$kind"; done
+          printf '[global]\nconfig_version=3\nbackend=CoreMLNative\napple_device=NPU\nengine_reuse=tiles\n[slot_1]\nprofile_name=Check\n' > "$data/animejanai/animejanai.conf"
+          ANIMEJANAI_ROOT="$data" ANIMEJANAI_DATA_DIR="$data/animejanai" "$app/Contents/MacOS/AnimeJaNaiManager-HDR" > start.log 2>&1 &
+          pid=$!
+          sleep 15
+          if kill -0 "$pid" 2>/dev/null; then
+            # Ten seconds at most: the question may wait for a permission nobody can give here.
+            windows="$(perl -e 'alarm 10; exec @ARGV' osascript -e 'tell application "System Events" to count windows of (first process whose unix id is '"$pid"')' 2>/dev/null || echo unknown)"
+            echo "::notice title=manager starts on macOS::running after 15 s, windows: $windows"
+            kill "$pid"; wait "$pid" 2>/dev/null || true
+          else
+            wait "$pid" || code=$?
+            echo "exit code ${code:-0}" >> start.log
+            ls "$HOME/Library/Logs/DiagnosticReports" 2>/dev/null | tail -3 >> start.log
+            exit 1
+          fi
+          # What it read is what it keeps: the bank still names the engine and the target.
+          cat "$data/animejanai/animejanai.conf"
+          grep -q '^backend=CoreMLNative' "$data/animejanai/animejanai.conf"
+          grep -q '^apple_device=NPU' "$data/animejanai/animejanai.conf"
+          ditto -c -k --keepParent "$app" AnimeJaNaiManager-HDR-macos-arm64.zip
+          ls -la AnimeJaNaiManager-HDR-macos-arm64.zip
+      - name: What failed
+        if: failure()
+        shell: bash
+        run: |
+          for f in *.log; do
+            [ -f "$f" ] || continue
+            body="$(grep -v ': warning ' "$f" | tail -n 24 | cut -c1-300 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+            echo "::error title=${{ matrix.rid }} $f::${body:-empty}"
+          done
       - name: Upload settings screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -79,6 +180,7 @@ jobs:
             AnimeJaNaiManager-HDR.exe
             AnimeJaNaiManager-HDR-x64.zip
             AnimeJaNaiManager-HDR-linux-x64.tar.zst
+            AnimeJaNaiManager-HDR-macos-arm64.zip
           if-no-files-found: error
 
   publish:
@@ -94,8 +196,8 @@ jobs:
           pattern: manager-*
           merge-multiple: true
           path: assets
-      # A single writer publishes both platforms together; rolling updates cannot
-      # remove the other platform's files between two concurrent build jobs.
+      # A single writer publishes the three platforms together; rolling updates cannot
+      # remove another platform's files between two concurrent build jobs.
       - uses: ncipollo/release-action@v1
         with:
           tag: hdr-${{ github.sha }}

@@ -44,8 +44,8 @@ namespace AnimeJaNaiConfEditor.ViewModels
                    .Throttle(TimeSpan.FromMilliseconds(300)).Subscribe(_ => Save());
         }
 
-        public bool IsLinux => OperatingSystem.IsLinux();
-        public bool WindowsFeatures => OperatingSystem.IsWindows();
+        public bool IsLinux => MainWindowViewModel.OnLinux;
+        public bool WindowsFeatures => MainWindowViewModel.OnWindows;
         private string _linuxOutput = "auto";
         public string LinuxOutput
         {
@@ -308,7 +308,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 _conf.Set("skip_held_frames", SkipHeldFrames ? "yes" : "no");
                 _conf.Set("mpv_truehdr_look", MpvTrueHdrLook ? "yes" : "no");
                 _conf.Set("rife_display_sync", RifeDisplaySync ? "yes" : "no");
-                if (OperatingSystem.IsLinux() || _conf.Get("smooth_motion", "") != "") _conf.Set("smooth_motion", SmoothMotion ? "yes" : "no");
+                if (MainWindowViewModel.OnLinux || _conf.Get("smooth_motion", "") != "") _conf.Set("smooth_motion", SmoothMotion ? "yes" : "no");
                 _conf.Set("rife_max_factor", ((int)(RifeMaxFactor ?? 2)).ToString(INV));
                 _conf.Set("subtitle_white", ((int)(SubtitleWhite ?? 200)).ToString(INV));
                 _conf.Set("hdr_conversion", HdrConversion ? "yes" : "no");
@@ -343,20 +343,17 @@ namespace AnimeJaNaiConfEditor.ViewModels
             try
             {
                 var line = Encoding.UTF8.GetBytes("{\"command\":[\"script-message\",\"animejanai-reload-options\"]}\n");
-                if (OperatingSystem.IsLinux())
+                // Linux and macOS: the launcher gives the player a private socket.
+                if (!OperatingSystem.IsWindows())
                 {
                     var path = Environment.GetEnvironmentVariable("ANIMEJANAI_IPC_PATH");
-                    if (string.IsNullOrEmpty(path)) return;
-                    using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-                    using var timeout = new CancellationTokenSource(200);
-                    socket.ConnectAsync(new UnixDomainSocketEndPoint(path), timeout.Token).AsTask().GetAwaiter().GetResult();
-                    using var stream = new NetworkStream(socket);
-                    stream.WriteTimeout = 200;
-                    stream.Write(line);
-                    // Drain mpv's acknowledgement before closing so it does not log a broken pipe.
-                    stream.ReadTimeout = 200;
-                    var acknowledgement = new byte[512];
-                    stream.Read(acknowledgement, 0, acknowledgement.Length);
+                    if (!string.IsNullOrEmpty(path)) { Send(path, line); return; }
+                    // macOS, Manager opened without the player: every player that is running.
+                    if (!OperatingSystem.IsMacOS()) return;
+                    foreach (var found in Directory.GetFiles(Path.GetTempPath(), "animejanai-mpv-*.sock"))
+                    {
+                        try { Send(found, line); } catch (Exception) { }
+                    }
                 }
                 else
                 {
@@ -368,6 +365,20 @@ namespace AnimeJaNaiConfEditor.ViewModels
             {
                 // Player not running (or another pipe name): the file is read at the next start.
             }
+        }
+
+        static void Send(string path, byte[] line)
+        {
+            using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            using var timeout = new CancellationTokenSource(200);
+            socket.ConnectAsync(new UnixDomainSocketEndPoint(path), timeout.Token).AsTask().GetAwaiter().GetResult();
+            using var stream = new NetworkStream(socket);
+            stream.WriteTimeout = 200;
+            stream.Write(line);
+            // Drain mpv's acknowledgement before closing so it does not log a broken pipe.
+            stream.ReadTimeout = 200;
+            var acknowledgement = new byte[512];
+            stream.Read(acknowledgement, 0, acknowledgement.Length);
         }
 
         // ---------------------------------------------------------------- helpers
@@ -396,7 +407,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
     // Display description shared by every GPU. Old suffixed keys are read only for migration.
     public class DisplaySettings : ReactiveObject
     {
-        public bool WindowsFeatures => OperatingSystem.IsWindows();
+        public bool WindowsFeatures => MainWindowViewModel.OnWindows;
 
         // Windows HDR: "enable" = turned on by the player for playback, then restored; "follow" = untouched.
         private string _windowsHdr = "follow";

@@ -64,4 +64,10 @@
     <Error Condition="!Exists('$(PublishDir)/libSkiaSharp.so') Or !Exists('$(PublishDir)/libHarfBuzzSharp.so')"
            Text="Linux publication requires native SkiaSharp and HarfBuzz libraries." />
   </Target>
+  <!-- macOS: the same guarantee for the Avalonia, Skia and HarfBuzz libraries. -->
+  <Target Name="CopyMacNativeLibraries" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'osx-arm64'">
+    <Copy SourceFiles="@(NativeCopyLocalItems)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+    <Error Condition="!Exists('$(PublishDir)/libSkiaSharp.dylib') Or !Exists('$(PublishDir)/libHarfBuzzSharp.dylib') Or !Exists('$(PublishDir)/libAvaloniaNative.dylib')"
+           Text="macOS publication requires the native Avalonia, SkiaSharp and HarfBuzz libraries." />
+  </Target>
 </Project>

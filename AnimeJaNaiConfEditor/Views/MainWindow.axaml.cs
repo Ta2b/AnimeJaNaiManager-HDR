@@ -325,6 +325,39 @@ namespace AnimeJaNaiConfEditor.Views
         {
             if (DataContext is not MainWindowViewModel vm) return;
 
+            if (MainWindowViewModel.OnMac)
+            {
+                // macOS: the benchmark compares the engines and the processors, not resolutions
+                // of one engine; the full run adds other sizes and the Balanced model.
+                const string quick = "quick", full = "full";
+                var mac = new FATaskDialog
+                {
+                    Title = "Measure the engines on this Mac",
+                    Content = new TextBlock
+                    {
+                        TextWrapping = TextWrapping.Wrap,
+                        MaxWidth = 460,
+                        Text =
+                            "Each engine (Core ML through ONNX Runtime, Core ML native, Metal) is timed on each processor " +
+                            "(Auto, GPU, Neural Engine, GPU + Neural Engine) and the results are ranked.\n\n" +
+                            "Quick: the Performance model at 720p, a few minutes. Full: also 540p, 1080p and the Balanced " +
+                            "model, ten to fifteen minutes. The first run is longer: Core ML compiles each model once.\n\n" +
+                            "Close the player and leave the Mac idle while it runs.",
+                    },
+                    Buttons =
+                    {
+                        new FATaskDialogButton("Quick", quick),
+                        new FATaskDialogButton("Full", full),
+                        FATaskDialogButton.CancelButton,
+                    },
+                };
+                mac.XamlRoot = this;
+                var choice = await mac.ShowAsync();
+                if (Equals(choice, quick)) ShowBenchmarkWindow("rapide");
+                else if (Equals(choice, full)) ShowBenchmarkWindow(null);
+                return;
+            }
+
             const string runResult = "run";
             var td = new FATaskDialog
             {
@@ -355,21 +388,23 @@ namespace AnimeJaNaiConfEditor.Views
             // Windows: the launcher opens its own console. Linux has no console to open: the
             // benchmark's output is shown here while it runs.
             if (OperatingSystem.IsWindows()) vm.LaunchBenchmark();
-            else ShowBenchmarkWindow();
+            else ShowBenchmarkWindow(null);
         }
 
-        private void ShowBenchmarkWindow()
+        private void ShowBenchmarkWindow(string? argument)
         {
             var output = new TextBox
             {
                 IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap,
-                FontFamily = new Avalonia.Media.FontFamily("monospace"), FontSize = 13,
+                FontFamily = new Avalonia.Media.FontFamily(MainWindowViewModel.OnMac ? "Menlo" : "monospace"), FontSize = 13,
                 BorderThickness = new Thickness(0),
-                Text = "Starting the playback benchmark. Leave the player closed and the computer idle while it runs.\n\n",
+                Text = MainWindowViewModel.OnMac
+                    ? "Measuring the engines. Leave the player closed and the Mac idle while it runs.\n\n"
+                    : "Starting the playback benchmark. Leave the player closed and the computer idle while it runs.\n\n",
             };
             var window = new Window
             {
-                Title = "AnimeJaNai playback benchmark", Width = 820, Height = 520,
+                Title = MainWindowViewModel.OnMac ? "AnimeJaNai engine benchmark" : "AnimeJaNai playback benchmark", Width = 820, Height = 520,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = output,
             };
             var process = new System.Diagnostics.Process();
@@ -377,8 +412,9 @@ namespace AnimeJaNaiConfEditor.Views
             // One pipe for both streams, so that errors appear where they happened.
             string script = Path.Combine(MainWindowViewModel.DataDir, "benchmarks", "animejanai_benchmark_all.sh");
             process.StartInfo.ArgumentList.Add("-c");
-            process.StartInfo.ArgumentList.Add("exec /bin/sh \"$0\" 2>&1");
+            process.StartInfo.ArgumentList.Add("exec /bin/sh \"$0\" \"$@\" 2>&1");
             process.StartInfo.ArgumentList.Add(script);
+            if (argument != null) process.StartInfo.ArgumentList.Add(argument);
             process.StartInfo.WorkingDirectory = MainWindowViewModel.DataDir;
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.RedirectStandardOutput = true;
@@ -416,7 +452,8 @@ namespace AnimeJaNaiConfEditor.Views
                     await Pump(process.StandardOutput);
                     await process.WaitForExitAsync();
                     Append(process.ExitCode == 0
-                        ? "\nFinished. The results are saved; \"Submit Benchmark\" can share them.\n"
+                        ? (MainWindowViewModel.OnMac ? "\nFinished. Choose the fastest engine and compute target in Global Settings.\n"
+                            : "\nFinished. The results are saved; \"Submit to Catalog\" can share them.\n")
                         : "\nThe benchmark stopped (code " + process.ExitCode + ").\n");
                 }
                 catch (Exception ex) when (!closed) { Append("\nCould not run the benchmark: " + ex.Message + "\n"); }

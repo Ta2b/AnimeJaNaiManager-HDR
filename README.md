@@ -43,8 +43,8 @@ in full config exports. It does not change the video frame rate or enable RIFE.
 
 ## Builds and releases
 
-The HDR workflow checks and builds Windows/Linux independently, then publishes
-both runtime packages together. `hdr-<commit SHA>` identifies the exact source;
+The HDR workflow checks and builds Windows, Linux and macOS (Apple Silicon)
+independently, then publishes the three runtime packages together. `hdr-<commit SHA>` identifies the exact source;
 `latest-hdr-settings-0.8` remains available for existing installations. PRs run
 checks without publication. `player-source-ref.txt` pins the shared player code.
 The previous upstream release workflow is retired. See the companion player's
