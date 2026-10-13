@@ -1627,7 +1627,9 @@ chain_2_rife=no";
                     x => x.AppleEngine,
                     x => x.AppleDevice,
                     x => x.EngineReuse,
-                    x => x.AppleAutoProfile).Subscribe(x =>
+                    x => x.AppleAutoProfile,
+                    x => x.RifeDevice,
+                    x => x.EngineBoost).Subscribe(x =>
                     {
                         Vm?.WriteAnimeJaNaiConf();
                     });

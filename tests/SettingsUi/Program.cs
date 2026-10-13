@@ -63,6 +63,28 @@ try
             window.GetVisualDescendants().OfType<TabItem>().All(tab => !Equals(tab.Header, "Components") || !tab.IsVisible)
             && window.FindControl<Expander>("PlaybackSettingsExpander")?.IsVisible == false
             && !window.FindControl<Expander>("EngineSettingsExpander")!.IsEffectivelyVisible);
+        // The settings added after the first macOS version: each must be written as soon as it
+        // is chosen, with nothing else touched afterwards, and be there when the bank is read again.
+        ToggleButton Rife(string content) => window.GetVisualDescendants().OfType<WrapPanel>()
+            .First(row => row.Children.OfType<TextBlock>().Any(label => label.Text == "RIFE interpolation on"))
+            .Children.OfType<ToggleButton>().First(button => Equals(button.Content, content));
+        string Bank() => File.ReadAllText(Path.Combine(data, "animejanai.conf"));
+        Named("Core ML (native)").IsChecked = true; Dispatcher.UIThread.RunJobs();
+        Named("GPU + Neural Engine + CPU").IsChecked = true; Dispatcher.UIThread.RunJobs();
+        Check("GPU + Neural Engine + CPU is saved when chosen", Bank().Contains("apple_device=GPU+NPU+CPU"));
+        Check("RIFE processor starts on Auto", Rife("Auto").IsChecked == true && Bank().Contains("engine_rife_device=auto"));
+        Rife("GPU").IsChecked = true; Dispatcher.UIThread.RunJobs();
+        Check("the RIFE processor is saved when chosen", Bank().Contains("engine_rife_device=gpu") && Rife("Auto").IsChecked == false);
+        Check("the RIFE processor is still there when the bank is read again", vm.ReadAnimeJaNaiConf(Path.Combine(data, "animejanai.conf")).RifeDevice == "gpu");
+        Rife("Neural Engine (NPU)").IsChecked = true; Dispatcher.UIThread.RunJobs();
+        Check("changing the RIFE processor again is saved too", Bank().Contains("engine_rife_device=npu"));
+        var held = window.GetVisualDescendants().OfType<CheckBox>().First(box => (box.Content as string ?? "").StartsWith("Balanced model on drawings"));
+        Check("Balanced on held drawings is not offered with reuse by areas", !held.IsEnabled);
+        Named("Whole frames").IsChecked = true; Dispatcher.UIThread.RunJobs();
+        Check("Balanced on held drawings is offered with whole-frame reuse", held.IsEnabled);
+        held.IsChecked = true; Dispatcher.UIThread.RunJobs();
+        var read = vm.ReadAnimeJaNaiConf(Path.Combine(data, "animejanai.conf"));
+        Check("Balanced on held drawings is saved when ticked and read again", Bank().Contains("engine_boost=yes") && read.EngineBoost && read.RifeDevice == "npu" && read.AppleDevice == "GPU+NPU+CPU");
     }
     foreach (string name in new[] { "HdrAppearanceExpander", "PlaybackSettingsExpander", "EngineSettingsExpander", "DiagnosticsExpander" })
         Check(name + " initially collapsed", window.FindControl<Expander>(name)?.IsExpanded == false);
