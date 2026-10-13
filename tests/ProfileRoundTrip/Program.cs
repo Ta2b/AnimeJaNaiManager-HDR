@@ -118,7 +118,25 @@ try
             throw new Exception("Windows without NVIDIA: RTX options greyed, AMD options offered");
         if (!winPending.RtxHdr || !winPending.RtxVsr || !winPending.Amf)
             throw new Exception("Pending detection must not grey anything on Windows");
+        if (!linuxNvidia.SmoothMotion || linuxAmd.SmoothMotion || linuxIntel.SmoothMotion || winNvidia.SmoothMotion || winPending.SmoothMotion)
+            throw new Exception("Smooth Motion is a Linux NVIDIA setting only");
+        string layers = Path.Combine(data, "layers"); Directory.CreateDirectory(layers);
+        File.WriteAllText(Path.Combine(layers, "other.json"), "{\"layer\":{}}");
+        if (MainWindowViewModel.SmoothMotionLayerInstalled(layers)) throw new Exception("Smooth Motion found without the driver layer");
+        File.WriteAllText(Path.Combine(layers, "nvidia_layers.json"), "{\"enable_environment\":{\"NVPRESENT_ENABLE_SMOOTH_MOTION\":\"1\"}}");
+        if (!MainWindowViewModel.SmoothMotionLayerInstalled(layers)) throw new Exception("Smooth Motion driver layer not recognised");
+        string smoothPath = Path.Combine(data, "smooth.conf");
+        File.WriteAllText(smoothPath, "# keep\nrife_display_sync=no\n");
+        var smooth = new HdrSettings(smoothPath);
+        if (smooth.SmoothMotion) throw new Exception("Smooth Motion must be off by default");
+        if (OperatingSystem.IsLinux())
+        {
+            smooth.SmoothMotion = true; smooth.Save();
+            if (!new HdrSettings(smoothPath).SmoothMotion || !File.ReadAllText(smoothPath).Contains("smooth_motion=yes") || !File.ReadAllText(smoothPath).Contains("# keep"))
+                throw new Exception("Smooth Motion lost at save and reload");
+        }
         Console.WriteLine("PASS GPU-specific options follow the GPUs of the machine");
+        Console.WriteLine("PASS Smooth Motion: Linux NVIDIA only, driver layer required, saved and reloaded");
     }
     if (OperatingSystem.IsLinux())
     {

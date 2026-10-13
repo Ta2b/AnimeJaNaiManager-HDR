@@ -360,6 +360,8 @@
                   </WrapPanel>
                   <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.AutoDisplayRefresh}" Content="Automatically change display refresh rate (experimental)" />
                 </StackPanel>
+                <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.SmoothMotion}" Content="NVIDIA Smooth Motion (driver frame generation)" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding SmoothMotionSelectable}" />
+                <TextBlock Classes="help" TextWrapping="Wrap" IsVisible="{Binding LinuxFeatures}" Text="Smooth Motion needs an NVIDIA GPU and a driver that provides it; it is greyed otherwise. The driver generates one image between two displayed images, on the whole window, subtitles included, after RIFE and the upscaling. Restart the player after changing it. On Windows, set it in the NVIDIA app for this player; AMD and Intel have no equivalent on Linux." />
                 <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.RifeDisplaySync}" Content="Match enabled RIFE profiles to display refresh" />
                 <WrapPanel IsVisible="{Binding HdrSettings.RifeDisplaySync}">
                   <TextBlock Text="Maximum RIFE factor" Width="150" VerticalAlignment="Center" />

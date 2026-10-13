@@ -121,14 +121,16 @@ namespace AnimeJaNaiConfEditor.ViewModels
         // Options tied to one GPU maker are greyed when the machine has no GPU of that maker.
         // null = not known (Windows detection pending, or no way to tell AMD from Intel there):
         // the option stays selectable. A hybrid machine keeps the options of each of its GPUs.
-        public readonly record struct GpuOptions(bool RtxHdr, bool RtxVsr, bool Amf, bool MiGraphX, bool OpenVino)
+        public readonly record struct GpuOptions(bool RtxHdr, bool RtxVsr, bool Amf, bool MiGraphX, bool OpenVino, bool SmoothMotion)
         {
             public static GpuOptions For(bool windows, bool? nvidia, bool? amd, bool? intel) => new(
                 RtxHdr: nvidia != false,            // Windows: RTX Video SDK; Linux: Maxine TrueHDR stage
                 RtxVsr: windows && nvidia != false,
                 Amf: windows && amd != false,       // AMD VideoSR and AMF frame generation
                 MiGraphX: !windows && amd != false,
-                OpenVino: !windows && intel != false);
+                OpenVino: !windows && intel != false,
+                // Linux only: on Windows Smooth Motion is a per-program driver setting (NVIDIA app).
+                SmoothMotion: !windows && nvidia == true);
         }
 
         // RTX Video HDR needs an NVIDIA GPU; unknown (detection pending) keeps it selectable.
@@ -138,6 +140,26 @@ namespace AnimeJaNaiConfEditor.ViewModels
             get => _rtxHdrSelectable;
             set => this.RaiseAndSetIfChanged(ref _rtxHdrSelectable, value);
         }
+
+        // The NVIDIA driver announces Smooth Motion in its Vulkan layer manifest (RTX 40 and newer
+        // drivers); without that line the variable set by the launcher would do nothing.
+        public static bool SmoothMotionLayerInstalled(params string[] folders)
+        {
+            if (folders.Length == 0)
+                folders = ["/usr/share/vulkan/implicit_layer.d", "/etc/vulkan/implicit_layer.d",
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local/share/vulkan/implicit_layer.d")];
+            foreach (string folder in folders)
+            {
+                if (!Directory.Exists(folder)) continue;
+                foreach (string file in Directory.EnumerateFiles(folder, "*.json"))
+                    try { if (File.ReadAllText(file).Contains("NVPRESENT_ENABLE_SMOOTH_MOTION")) return true; }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+            }
+            return false;
+        }
+        private bool _smoothMotionSelectable;
+        public bool SmoothMotionSelectable { get => _smoothMotionSelectable; set => this.RaiseAndSetIfChanged(ref _smoothMotionSelectable, value); }
 
         private bool _rtxVsrSelectable = true;
         public bool RtxVsrSelectable { get => _rtxVsrSelectable; set => this.RaiseAndSetIfChanged(ref _rtxVsrSelectable, value); }
@@ -171,6 +193,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             RtxHdrSelectable = gpu.RtxHdr;
             RtxVsrSelectable = gpu.RtxVsr;
             AmfSelectable = gpu.Amf;
+            SmoothMotionSelectable = gpu.SmoothMotion && SmoothMotionLayerInstalled();
             if (nvidia is not null) HdrSettings.SelectLegacyDisplay(nvidia == true ? "nvidia" : "amd");
             Engines.GpuName = ComponentManager.GpuName;
             Engines.Refresh();

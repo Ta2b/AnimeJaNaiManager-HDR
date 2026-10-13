@@ -155,6 +155,10 @@ namespace AnimeJaNaiConfEditor.ViewModels
         private bool _rifeDisplaySync;
         public bool RifeDisplaySync { get => _rifeDisplaySync; set => this.RaiseAndSetIfChanged(ref _rifeDisplaySync, value); }
 
+        // Linux, NVIDIA: the driver's frame generation on the Vulkan swapchain. The launcher reads it.
+        private bool _smoothMotion;
+        public bool SmoothMotion { get => _smoothMotion; set => this.RaiseAndSetIfChanged(ref _smoothMotion, value); }
+
         private decimal? _rifeMaxFactor = 2;
         public decimal? RifeMaxFactor { get => _rifeMaxFactor; set => this.RaiseAndSetIfChanged(ref _rifeMaxFactor, Clamp(value, 1, 8, 2)); }
 
@@ -270,6 +274,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             SkipHeldFrames = ParseBool(_conf.Get("skip_held_frames", "yes"));
             MpvTrueHdrLook = ParseBool(_conf.Get("mpv_truehdr_look", "yes"));
             RifeDisplaySync = ParseBool(_conf.Get("rife_display_sync", "no"));
+            SmoothMotion = ParseBool(_conf.Get("smooth_motion", "no"));
             RifeMaxFactor = Number(_conf.Get("rife_max_factor", "2"));
             SubtitleWhite = Number(_conf.Get("subtitle_white", "200"));
             HdrConversion = ParseBool(_conf.Get("hdr_conversion", "yes"));
@@ -303,6 +308,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 _conf.Set("skip_held_frames", SkipHeldFrames ? "yes" : "no");
                 _conf.Set("mpv_truehdr_look", MpvTrueHdrLook ? "yes" : "no");
                 _conf.Set("rife_display_sync", RifeDisplaySync ? "yes" : "no");
+                if (OperatingSystem.IsLinux() || _conf.Get("smooth_motion", "") != "") _conf.Set("smooth_motion", SmoothMotion ? "yes" : "no");
                 _conf.Set("rife_max_factor", ((int)(RifeMaxFactor ?? 2)).ToString(INV));
                 _conf.Set("subtitle_white", ((int)(SubtitleWhite ?? 200)).ToString(INV));
                 _conf.Set("hdr_conversion", HdrConversion ? "yes" : "no");
