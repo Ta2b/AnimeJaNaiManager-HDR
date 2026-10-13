@@ -48,6 +48,13 @@ try
     }
     var advanced = window.FindControl<Expander>("HdrAppearanceExpander")!;
     advanced.IsExpanded = true; Dispatcher.UIThread.RunJobs();
+    ToggleButton Toggle(string content) => window.GetVisualDescendants().OfType<ToggleButton>().First(button => Equals(button.Content, content));
+    Check("RTX Video HDR follows the NVIDIA detection", Toggle("RTX Video HDR").IsEnabled == vm.RtxHdrSelectable);
+    if (OperatingSystem.IsLinux())
+    {
+        Check("MIGraphX follows the AMD detection", Toggle("MIGraphX").IsEnabled == vm.MiGraphXSelectable);
+        Check("OpenVINO follows the Intel detection", Toggle("OpenVINO").IsEnabled == vm.OpenVinoSelectable);
+    }
     var white = window.GetVisualDescendants().OfType<NumericUpDown>()
         .First(box => box.DataContext == vm && box.Value == vm.HdrSettings.SubtitleWhite);
     white.Value = 230;

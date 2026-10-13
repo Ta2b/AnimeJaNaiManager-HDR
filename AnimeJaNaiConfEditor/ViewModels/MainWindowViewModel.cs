@@ -118,6 +118,19 @@ namespace AnimeJaNaiConfEditor.ViewModels
 
         public string HdrConfPath => Path.Combine(RootDir, "portable_config", "script-opts", "animejanai_hdr_auto.conf");
 
+        // Options tied to one GPU maker are greyed when the machine has no GPU of that maker.
+        // null = not known (Windows detection pending, or no way to tell AMD from Intel there):
+        // the option stays selectable. A hybrid machine keeps the options of each of its GPUs.
+        public readonly record struct GpuOptions(bool RtxHdr, bool RtxVsr, bool Amf, bool MiGraphX, bool OpenVino)
+        {
+            public static GpuOptions For(bool windows, bool? nvidia, bool? amd, bool? intel) => new(
+                RtxHdr: nvidia != false,            // Windows: RTX Video SDK; Linux: Maxine TrueHDR stage
+                RtxVsr: windows && nvidia != false,
+                Amf: windows && amd != false,       // AMD VideoSR and AMF frame generation
+                MiGraphX: !windows && amd != false,
+                OpenVino: !windows && intel != false);
+        }
+
         // RTX Video HDR needs an NVIDIA GPU; unknown (detection pending) keeps it selectable.
         private bool _rtxHdrSelectable = true;
         public bool RtxHdrSelectable
@@ -125,6 +138,13 @@ namespace AnimeJaNaiConfEditor.ViewModels
             get => _rtxHdrSelectable;
             set => this.RaiseAndSetIfChanged(ref _rtxHdrSelectable, value);
         }
+
+        private bool _rtxVsrSelectable = true;
+        public bool RtxVsrSelectable { get => _rtxVsrSelectable; set => this.RaiseAndSetIfChanged(ref _rtxVsrSelectable, value); }
+        private bool _miGraphXSelectable;
+        public bool MiGraphXSelectable { get => _miGraphXSelectable; set => this.RaiseAndSetIfChanged(ref _miGraphXSelectable, value); }
+        private bool _openVinoSelectable;
+        public bool OpenVinoSelectable { get => _openVinoSelectable; set => this.RaiseAndSetIfChanged(ref _openVinoSelectable, value); }
 
         // AMD AMF frame generation runs in the player on AMD only; unknown keeps it selectable.
         private bool _amfSelectable = true;
@@ -138,10 +158,19 @@ namespace AnimeJaNaiConfEditor.ViewModels
         {
             bool trtInstalled = TrtOnDisk();
             bool? nvidia = ComponentManager.GpuNvidia;
-            if (LinuxFeatures && nvidia is null)
-                nvidia = AnimeJaNai.Platform.PlatformServices.SelectAdapter(AnimeJaNai.Platform.PlatformServices.LinuxAdapters()).vendor == "nvidia";
-            RtxHdrSelectable = WindowsFeatures && nvidia != false;
-            AmfSelectable = WindowsFeatures && nvidia != true;
+            // Windows only tells NVIDIA from the rest; Linux lists every adapter.
+            bool? amd = nvidia == true ? false : null, intel = null;
+            if (LinuxFeatures)
+            {
+                var vendors = AnimeJaNai.Platform.PlatformServices.LinuxAdapters().Select(a => a.vendor).ToHashSet();
+                nvidia ??= AnimeJaNai.Platform.PlatformServices.SelectAdapter(AnimeJaNai.Platform.PlatformServices.LinuxAdapters()).vendor == "nvidia";
+                amd = vendors.Contains("amd");
+                intel = vendors.Contains("intel");
+            }
+            var gpu = GpuOptions.For(WindowsFeatures, nvidia, amd, intel);
+            RtxHdrSelectable = gpu.RtxHdr;
+            RtxVsrSelectable = gpu.RtxVsr;
+            AmfSelectable = gpu.Amf;
             if (nvidia is not null) HdrSettings.SelectLegacyDisplay(nvidia == true ? "nvidia" : "amd");
             Engines.GpuName = ComponentManager.GpuName;
             Engines.Refresh();
@@ -152,6 +181,8 @@ namespace AnimeJaNaiConfEditor.ViewModels
             {
                 VulkanSelectable = VulkanOnDisk();
                 OnnxRuntimeSelectable = OnnxRuntimeOnDisk();
+                MiGraphXSelectable = OnnxRuntimeSelectable && gpu.MiGraphX;
+                OpenVinoSelectable = OnnxRuntimeSelectable && gpu.OpenVino;
                 AnimeJaNaiConf.BackendAutoFallback = false;
                 if (AnimeJaNaiConf.DirectMlSelected) AnimeJaNaiConf.SetTensorRtSelected();
                 BackendNotice = AnimeJaNaiConf.OnnxRuntimeSelected
@@ -664,6 +695,13 @@ chain_2_rife=no";
                 {
                     foreach (var model in chain.Models) model.AllModels = GetAllModels();
                     chain.RifeModelList = new(RifeModels);
+                    // Linux: Vulkan only has RIFE 4.6, TensorRT has every model but 4.6. A profile kept
+                    // across an engine change would name a model its new engine cannot load.
+                    if (LinuxFeatures && chain.RifeModelList.Count > 0 && !chain.RifeModelList.Contains(chain.RifeModel))
+                    {
+                        string preferred = RifeValueToLabel("426");
+                        chain.RifeModel = chain.RifeModelList.Contains(preferred) ? preferred : chain.RifeModelList[^1];
+                    }
                     chain.RaisePropertyChanged(nameof(UpscaleChain.RifeToggleEnabled));
                 }
         }

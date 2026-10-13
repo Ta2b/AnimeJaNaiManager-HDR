@@ -99,12 +99,33 @@ try
     if (!merged.Contains("# comment") || !merged.Contains("# choice") || !merged.Contains("unknown=keep") || merged.Contains("display_rate_match"))
         throw new Exception("INI merge lost comments/unknown keys or retained removed managed option");
     Console.WriteLine("PASS INI preserves comments and removes optional managed keys");
+    {
+        var linuxNvidia = MainWindowViewModel.GpuOptions.For(false, true, false, true);   // hybrid Intel + NVIDIA
+        var linuxAmd = MainWindowViewModel.GpuOptions.For(false, false, true, false);
+        var linuxIntel = MainWindowViewModel.GpuOptions.For(false, false, false, true);
+        var winNvidia = MainWindowViewModel.GpuOptions.For(true, true, false, null);
+        var winOther = MainWindowViewModel.GpuOptions.For(true, false, null, null);
+        var winPending = MainWindowViewModel.GpuOptions.For(true, null, null, null);
+        if (!linuxNvidia.RtxHdr || linuxNvidia.RtxVsr || linuxNvidia.Amf || linuxNvidia.MiGraphX || !linuxNvidia.OpenVino)
+            throw new Exception("Linux NVIDIA: RTX Video HDR must be offered, AMD-only options greyed");
+        if (linuxAmd.RtxHdr || !linuxAmd.MiGraphX || linuxAmd.OpenVino || linuxAmd.Amf)
+            throw new Exception("Linux AMD: only MIGraphX is vendor-specific");
+        if (linuxIntel.RtxHdr || linuxIntel.MiGraphX || !linuxIntel.OpenVino)
+            throw new Exception("Linux Intel: only OpenVINO is vendor-specific");
+        if (!winNvidia.RtxHdr || !winNvidia.RtxVsr || winNvidia.Amf || winNvidia.MiGraphX || winNvidia.OpenVino)
+            throw new Exception("Windows NVIDIA: RTX options offered, AMD options greyed");
+        if (winOther.RtxHdr || winOther.RtxVsr || !winOther.Amf)
+            throw new Exception("Windows without NVIDIA: RTX options greyed, AMD options offered");
+        if (!winPending.RtxHdr || !winPending.RtxVsr || !winPending.Amf)
+            throw new Exception("Pending detection must not grey anything on Windows");
+        Console.WriteLine("PASS GPU-specific options follow the GPUs of the machine");
+    }
     if (OperatingSystem.IsLinux())
     {
         vm.AnimeJaNaiConf.UserSelectDirectMl();
-        if (vm.AnimeJaNaiConf.DirectMlSelected || vm.RtxHdrSelectable || vm.AmfSelectable)
+        if (vm.AnimeJaNaiConf.DirectMlSelected || vm.RtxVsrSelectable || vm.AmfSelectable)
             throw new Exception("Linux offered a Windows-only backend");
-        Console.WriteLine("PASS Linux refuses DirectML, RTX Video and AMF");
+        Console.WriteLine("PASS Linux refuses DirectML, RTX VSR and AMF");
         Directory.CreateDirectory(Path.Combine(data, "inference"));
         File.WriteAllText(Path.Combine(data, "inference", "libaji_vulkan.so"), "fixture");
         Directory.CreateDirectory(Path.Combine(data, "rife-vulkan", "rife-v4.6"));
@@ -118,6 +139,17 @@ try
         if (vm.GetAllModels().Count != 1 || vm.GetAllModels()[0] != "spatial" || MainWindowViewModel.RifeModels.Count != 1)
             throw new Exception("Vulkan offered a model that was not converted");
         vm.CurrentSlot.Chains[0].RifeModel = MainWindowViewModel.RifeValueToLabel("46");
+        // Back to TensorRT with ONNX RIFE models installed: 4.6 does not exist there.
+        Directory.CreateDirectory(Path.Combine(data, "rife"));
+        foreach (string file in new[] { "rife_v4.25.onnx", "rife_v4.26.onnx", "rife_v4.26_heavy.onnx" })
+            File.WriteAllText(Path.Combine(data, "rife", file), "fixture");
+        vm.AnimeJaNaiConf.UserSelectTensorRt();
+        if (vm.CurrentSlot.Chains[0].RifeModel != MainWindowViewModel.RifeValueToLabel("426"))
+            throw new Exception("TensorRT kept the Vulkan-only RIFE 4.6: " + vm.CurrentSlot.Chains[0].RifeModel);
+        vm.AnimeJaNaiConf.UserSelectVulkan();
+        if (vm.CurrentSlot.Chains[0].RifeModel != MainWindowViewModel.RifeValueToLabel("46"))
+            throw new Exception("Vulkan kept a TensorRT RIFE model: " + vm.CurrentSlot.Chains[0].RifeModel);
+        Console.WriteLine("PASS RIFE model follows the engine (4.26 on TensorRT, 4.6 on Vulkan)");
         string vulkan = Path.Combine(data, "vulkan.conf");
         vm.WriteAnimeJaNaiConf(vulkan);
         var reloaded = vm.ReadAnimeJaNaiConf(vulkan);

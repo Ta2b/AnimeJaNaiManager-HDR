@@ -217,11 +217,11 @@
                   <TextBlock Text="Inference engine" Margin="0,0,12,0" VerticalAlignment="Center" />
                   <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TensorRtSelected}" Content="TensorRT" Command="{Binding AnimeJaNaiConf.UserSelectTensorRt}" IsEnabled="{Binding TrtSelectable}" />
                   <ToggleButton IsChecked="{Binding AnimeJaNaiConf.VulkanSelected}" Content="Vulkan" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding VulkanSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectVulkan}" />
-                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.MiGraphXSelected}" Content="MIGraphX" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding OnnxRuntimeSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectMiGraphX}" />
-                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.OpenVinoSelected}" Content="OpenVINO" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding OnnxRuntimeSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectOpenVino}" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.MiGraphXSelected}" Content="MIGraphX" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding MiGraphXSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectMiGraphX}" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.OpenVinoSelected}" Content="OpenVINO" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding OpenVinoSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectOpenVino}" />
                   <ToggleButton IsChecked="{Binding AnimeJaNaiConf.DirectMlSelected}" Content="DirectML" IsEnabled="{Binding WindowsFeatures}" Command="{Binding AnimeJaNaiConf.UserSelectDirectMl}" />
                 </WrapPanel>
-                <TextBlock Classes="help" Text="TensorRT: NVIDIA. DirectML: Windows. Vulkan: Linux, any GPU. MIGraphX (AMD on ROCm) and OpenVINO (Intel): Linux, experimental. Choose the startup profile in Profiles; restart playback after changing the engine." />
+                <TextBlock Classes="help" Text="Engines that this GPU cannot use are greyed. TensorRT: NVIDIA. DirectML: Windows. Vulkan: Linux, any GPU. MIGraphX (AMD on ROCm) and OpenVINO (Intel): Linux, experimental. Choose the startup profile in Profiles; restart playback after changing the engine." />
                 <TextBlock TextWrapping="Wrap" Foreground="Orange" IsVisible="{Binding HasBackendNotice}" Text="{Binding BackendNotice}" />
               </StackPanel>
             </Border>
@@ -262,7 +262,7 @@
                     <ToggleButton IsChecked="{Binding HdrSettings.LinuxSdr}" Content="SDR" />
                     <ToggleButton IsChecked="{Binding HdrSettings.LinuxPq}" Content="HDR PQ" />
                   </WrapPanel>
-                  <TextBlock Classes="help" Text="Auto follows the compositor. Enable HDR in GNOME on a compatible display; grading requires negotiated PQ output. Ctrl+Alt+H shows the output diagnosis." />
+                  <TextBlock Classes="help" Text="Auto follows the compositor. Enable HDR in the desktop settings (GNOME, KDE) on a compatible display; grading requires negotiated PQ output. Ctrl+Alt+H shows the output diagnosis." />
                 </StackPanel>
                 <TextBlock Classes="help" Text="Auto uses display information available to the player. Choose Manual only with a measured or calibrated peak. Ctrl+Alt+P opens the HDR calibration pattern." />
               </StackPanel>
@@ -288,6 +288,7 @@
                       <ToggleButton IsChecked="{Binding HdrSettings.BackendRtx}" Content="RTX Video HDR" IsEnabled="{Binding RtxHdrSelectable}" />
                       <ToggleButton IsChecked="{Binding HdrSettings.BackendMpv}" Content="mpv" />
                     </WrapPanel>
+                    <TextBlock Classes="help" TextWrapping="Wrap" IsVisible="{Binding LinuxFeatures}" Text="RTX Video HDR on Linux: NVIDIA GPU, TensorRT engine, Wayland output set to HDR PQ, an active AnimeJaNai profile and the TrueHDR stage (NVIDIA Maxine Video Effects, installed separately). Without these, mpv converts with the same look." />
                     <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.EnhanceNativeHdr}" Content="Also grade native HDR videos" />
                     <WrapPanel>
                       <TextBlock Text="Subtitle white" Width="180" VerticalAlignment="Center" />
@@ -339,7 +340,7 @@
                   <ToggleButton IsChecked="{Binding HdrSettings.UpscaleAuto}" Content="Auto" />
                   <ToggleButton IsChecked="{Binding HdrSettings.UpscaleClassic}" Content="Standard" />
                   <ToggleButton IsChecked="{Binding HdrSettings.UpscaleOff}" Content="Off" />
-                  <ToggleButton IsChecked="{Binding HdrSettings.UpscaleNvidia}" Content="RTX VSR" IsVisible="{Binding WindowsFeatures}" IsEnabled="{Binding RtxHdrSelectable}" />
+                  <ToggleButton IsChecked="{Binding HdrSettings.UpscaleNvidia}" Content="RTX VSR" IsVisible="{Binding WindowsFeatures}" IsEnabled="{Binding RtxVsrSelectable}" />
                   <ToggleButton IsChecked="{Binding HdrSettings.UpscaleAmd}" Content="AMD VideoSR" IsVisible="{Binding WindowsFeatures}" IsEnabled="{Binding AmfSelectable}" />
                 </WrapPanel>
                 <WrapPanel IsVisible="{Binding WindowsFeatures}">
@@ -366,9 +367,9 @@
                 </WrapPanel>
                 <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.GpuSubtitles}" Content="Render subtitles on GPU (experimental)" IsVisible="{Binding WindowsFeatures}" />
                 <TextBlock Classes="help" Text="Renderer and experimental playback changes require restarting the player. Frame generation stays off until explicitly enabled." />
-                <Expander Header="RTX Video controls" IsVisible="{Binding WindowsFeatures}" IsEnabled="{Binding RtxHdrSelectable}" IsExpanded="False">
+                <Expander Header="RTX Video controls" IsEnabled="{Binding RtxHdrSelectable}" IsExpanded="False">
                   <StackPanel Spacing="10" Margin="0,10">
-                    <WrapPanel>
+                    <WrapPanel IsVisible="{Binding WindowsFeatures}">
                       <TextBlock Text="VSR quality" Width="150" VerticalAlignment="Center" />
                       <NumericUpDown Value="{Binding HdrSettings.RtxVsrQuality}" Minimum="1" Maximum="4" Increment="1" FormatString="0" Width="110" />
                     </WrapPanel>
