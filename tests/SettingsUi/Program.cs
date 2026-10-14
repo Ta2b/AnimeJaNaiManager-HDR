@@ -110,7 +110,7 @@ try
     if (!mac) Check("RTX Video HDR follows the NVIDIA detection", Toggle("RTX Video HDR").IsEnabled == vm.RtxHdrSelectable);
     if (OperatingSystem.IsLinux() && !mac)
     {
-        Check("MIGraphX follows the AMD detection", Toggle("MIGraphX").IsEnabled == vm.MiGraphXSelectable);
+        Check("MIGraphX follows the AMD detection", Toggle("MIGraphX + HIP").IsEnabled == vm.MiGraphXSelectable);
         Check("OpenVINO follows the Intel detection", Toggle("OpenVINO").IsEnabled == vm.OpenVinoSelectable);
         window.FindControl<Expander>("PlaybackSettingsExpander")!.IsExpanded = true; Dispatcher.UIThread.RunJobs();
         var smooth = window.GetVisualDescendants().OfType<CheckBox>().Single(box => Equals(box.Content, "NVIDIA Smooth Motion (driver frame generation)"));

@@ -217,7 +217,7 @@
                   <TextBlock Text="Inference engine" Margin="0,0,12,0" VerticalAlignment="Center" />
                   <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TensorRtSelected}" Content="TensorRT" Command="{Binding AnimeJaNaiConf.UserSelectTensorRt}" IsEnabled="{Binding TrtSelectable}" />
                   <ToggleButton IsChecked="{Binding AnimeJaNaiConf.VulkanSelected}" Content="Vulkan" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding VulkanSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectVulkan}" />
-                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.MiGraphXSelected}" Content="MIGraphX" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding MiGraphXSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectMiGraphX}" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.MiGraphXSelected}" Content="MIGraphX + HIP" IsVisible="{Binding NotMacFeatures}" IsEnabled="{Binding MiGraphXSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectMiGraphX}" />
                   <ToggleButton IsChecked="{Binding AnimeJaNaiConf.OpenVinoSelected}" Content="OpenVINO" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding OpenVinoSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectOpenVino}" />
                   <ToggleButton IsChecked="{Binding AnimeJaNaiConf.DirectMlSelected}" Content="DirectML" IsEnabled="{Binding WindowsFeatures}" Command="{Binding AnimeJaNaiConf.UserSelectDirectMl}" />
                 </WrapPanel>
@@ -259,7 +259,7 @@
                   <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.AppleAutoProfile}" Content="Move to a lighter profile when this Mac cannot keep up with the video" />
                   <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="The player measures the time spent on each frame and remembers the profile this Mac holds; Ctrl+R in the player forgets it and measures again, Ctrl+J shows the timings and where the model runs. Choose the startup profile in Profiles." />
                 </StackPanel>
-                <TextBlock Classes="help" IsVisible="{Binding NotMacFeatures}" Text="Engines that this GPU cannot use are greyed. TensorRT: NVIDIA. DirectML: Windows. Vulkan: Linux, any GPU. MIGraphX (AMD on ROCm) and OpenVINO (Intel): Linux, experimental. Choose the startup profile in Profiles; restart playback after changing the engine." />
+                <TextBlock Classes="help" IsVisible="{Binding NotMacFeatures}" Text="Engines that this GPU cannot use are greyed. TensorRT: NVIDIA. DirectML: Windows. Vulkan: Linux, any GPU. MIGraphX + HIP: AMD on Windows/Linux with the native engine and compatible runtime. OpenVINO: Intel on Linux. Choose the startup profile in Profiles; restart playback after changing the engine." />
                 <TextBlock TextWrapping="Wrap" Foreground="Orange" IsVisible="{Binding HasBackendNotice}" Text="{Binding BackendNotice}" />
               </StackPanel>
             </Border>

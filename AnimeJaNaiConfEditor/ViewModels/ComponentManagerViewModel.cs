@@ -40,7 +40,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         {
             "trt-runtime" => "TensorRT runtime",
             "rife" => "RIFE interpolation models",
-            "onnxruntime" => "ONNX Runtime engine (OpenVINO, MIGraphX)",
+            "onnxruntime" => "GPU engines (MIGraphX + HIP, OpenVINO)",
             "trt-ptx" => "TensorRT kernels: other NVIDIA GPUs",
             _ when Name.StartsWith("trt-sm") => $"TensorRT kernels: {SmFamily(Name[6..])}",
             _ => Name,
@@ -50,7 +50,9 @@ namespace AnimeJaNaiConfEditor.ViewModels
         {
             "trt-runtime" => OperatingSystem.IsLinux() ? "Inference for NVIDIA GPUs. Without TensorRT, Linux keeps normal mpv playback." : "The fastest upscaling engine, for NVIDIA GPUs. Without it, NVIDIA users fall back to the slower DirectML engine.",
             "rife" => "Frame interpolation (e.g. 24 → 48 fps). Not needed if you only upscale.",
-            "onnxruntime" => "Upscaling on Intel GPUs (OpenVINO) and on AMD GPUs supported by ROCm (MIGraphX). Not needed with TensorRT or Vulkan.",
+            "onnxruntime" => OperatingSystem.IsWindows()
+                ? "Native MIGraphX + HIP upscaling and RIFE for supported AMD GPUs. This pack targets RX 9070 XT; a compatible AMD driver is required."
+                : "Native MIGraphX + HIP on supported AMD GPUs (requires ROCm), or ONNX Runtime/OpenVINO on Intel GPUs.",
             "trt-ptx" => "Fallback kernels for NVIDIA GPUs without a dedicated kernel pack. First engine build is slower.",
             _ when Name.StartsWith("trt-sm") => "Engine-builder kernels matched to this GPU generation. Only needed on these GPUs.",
             _ => "",

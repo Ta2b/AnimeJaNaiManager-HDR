@@ -1,5 +1,15 @@
 # AnimeJaNai Manager
 
+Native AMD integration (14 October 2026): MIGraphX + HIP is exposed on Windows
+and Linux when the native library is installed and the GPU is eligible. The
+optional GPU engines component carries the Windows runtime for RX 9070 XT;
+Linux needs a compatible system ROCm installation. Library presence enables the
+choice; driver/runtime compatibility is resolved when the player opens a model.
+Classic DirectML remains available on Windows. Native rank-5 temporal AMD models
+are not supported yet. No new tests or benchmarks were executed for this work;
+the Release build succeeded. See the player's `docs/CHANTIER-GPU-SPECIALISE.md`
+for source refs, build evidence and the exact integration checkpoint.
+
 Linux HDR port: [LINUX.md](LINUX.md) describes Vulkan/TensorRT selection,
 SDR/PQ output, Unix IPC and profile preservation. Windows keeps its existing
 TensorRT/DirectML backends.

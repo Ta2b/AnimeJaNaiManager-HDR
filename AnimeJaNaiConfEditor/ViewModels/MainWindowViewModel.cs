@@ -95,6 +95,9 @@ namespace AnimeJaNaiConfEditor.ViewModels
         // The ONNX Runtime engine; the vendor provider itself is only known at playback.
         public static bool OnnxRuntimeOnDisk() => OnLinux && File.Exists(Path.Combine(
             Environment.GetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR") ?? Path.Combine(DataDir, "inference"), "libaji_ort.so"));
+        public static bool NativeMiGraphXOnDisk() => !OnMac && File.Exists(Path.Combine(
+            Environment.GetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR") ?? Path.Combine(DataDir, "inference"),
+            OnLinux ? "libaji_migraphx_rgb.so" : "aji_migraphx.dll"));
         private bool _onnxRuntimeSelectable;
         public bool OnnxRuntimeSelectable { get => _onnxRuntimeSelectable; set => this.RaiseAndSetIfChanged(ref _onnxRuntimeSelectable, value); }
         public static bool VulkanRifeOnDisk() => File.Exists(Path.Combine(DataDir, "rife-vulkan", "rife-v4.6", "flownet.param")) &&
@@ -151,7 +154,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 RtxHdr: nvidia != false,            // Windows: RTX Video SDK; Linux: Maxine TrueHDR stage
                 RtxVsr: windows && nvidia != false,
                 Amf: windows && amd != false,       // AMD VideoSR and AMF frame generation
-                MiGraphX: !windows && amd != false,
+                MiGraphX: amd != false,
                 OpenVino: !windows && intel != false,
                 // Linux only: on Windows Smooth Motion is a per-program driver setting (NVIDIA app).
                 SmoothMotion: !windows && nvidia == true);
@@ -255,7 +258,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             if (LinuxFeatures)
             {
                 VulkanSelectable = VulkanOnDisk();
-                OnnxRuntimeSelectable = OnnxRuntimeOnDisk();
+                OnnxRuntimeSelectable = OnnxRuntimeOnDisk() || NativeMiGraphXOnDisk();
                 MiGraphXSelectable = OnnxRuntimeSelectable && gpu.MiGraphX;
                 OpenVinoSelectable = OnnxRuntimeSelectable && gpu.OpenVino;
                 AnimeJaNaiConf.BackendAutoFallback = false;
@@ -263,7 +266,9 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 BackendNotice = AnimeJaNaiConf.OnnxRuntimeSelected
                     ? (OnnxRuntimeSelectable
                         ? (AnimeJaNaiConf.MiGraphXSelected
-                            ? "Experimental: MIGraphX for AMD GPUs supported by ROCm. Needs an ONNX Runtime build with the MIGraphX provider in animejanai/inference. Upscaling only, no RIFE yet; SDR sources."
+                            ? (NativeMiGraphXOnDisk()
+                                ? "Native MIGraphX + HIP for AMD: spatial upscaling and RIFE. Requires a compatible ROCm runtime and GPU; restart playback after changing the engine."
+                                : "Legacy ONNX Runtime/MIGraphX provider. Install the native AMD engine for the specialized GPU path.")
                             : "Experimental: OpenVINO for Intel GPUs. Needs an ONNX Runtime build with the OpenVINO provider in animejanai/inference. Upscaling only, no RIFE yet; SDR sources.")
                         : "ONNX Runtime engine not installed: add \"ONNX Runtime engine\" in Components. Normal playback remains available.")
                     : AnimeJaNaiConf.VulkanSelected
@@ -276,6 +281,16 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 return;
             }
 
+            MiGraphXSelectable = NativeMiGraphXOnDisk() && gpu.MiGraphX;
+            if (AnimeJaNaiConf.MiGraphXSelected)
+            {
+                BackendNotice = MiGraphXSelectable
+                    ? "Native MIGraphX + HIP for AMD, with GPU video processing. Requires a compatible AMD driver and runtime."
+                    : "The native AMD engine is not installed or this GPU is unavailable. Choose DirectML or install the AMD engine.";
+                RifeMissing = !RifeOnDisk();
+                RefreshBackendModelLists();
+                return;
+            }
             string notice = "";
             if (trtUsable && AnimeJaNaiConf != null && AnimeJaNaiConf.DirectMlSelected &&
                 AnimeJaNaiConf.BackendAutoFallback)
@@ -2093,10 +2108,10 @@ chain_2_rife=no";
             OpenVinoSelected = false;
         }
 
-        // openVino false = MIGraphX. Linux only: Windows keeps DirectML for AMD and Intel.
+        // openVino false = native MIGraphX (Windows/Linux); OpenVINO is Linux only.
         public void SetOnnxRuntimeSelected(bool openVino)
         {
-            if (!MainWindowViewModel.OnLinux) { SetTensorRtSelected(); return; }
+            if (MainWindowViewModel.OnMac || (openVino && !MainWindowViewModel.OnLinux)) { SetTensorRtSelected(); return; }
             TensorRtSelected = false;
             DirectMlSelected = false;
             VulkanSelected = false;

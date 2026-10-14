@@ -1,7 +1,7 @@
 name: Build AnimeJaNai Manager (HDR)
 on:
   push:
-    branches: [hdr-settings-0.8]
+    branches: [hdr-settings-0.8, 'perf-specialized-*']
   pull_request:
     branches: [hdr-settings-0.8]
   workflow_dispatch:
@@ -135,7 +135,7 @@ jobs:
 
   publish:
     needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/hdr-settings-0.8'
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/hdr-settings-0.8' || startsWith(github.ref, 'refs/heads/perf-specialized-'))
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     permissions:
@@ -159,6 +159,7 @@ jobs:
           artifactErrorsFailBuild: true
           artifacts: assets/*
       - uses: ncipollo/release-action@v1
+        if: github.ref == 'refs/heads/hdr-settings-0.8'
         with:
           tag: latest-${{ github.ref_name }}
           name: AnimeJaNai Manager (HDR) - latest ${{ github.ref_name }}
