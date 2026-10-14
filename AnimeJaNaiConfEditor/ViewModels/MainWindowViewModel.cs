@@ -265,7 +265,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
                         ? (AnimeJaNaiConf.MiGraphXSelected
                             ? "Experimental: MIGraphX for AMD GPUs supported by ROCm. Needs an ONNX Runtime build with the MIGraphX provider in animejanai/inference. Upscaling only, no RIFE yet; SDR sources."
                             : "Experimental: OpenVINO for Intel GPUs. Needs an ONNX Runtime build with the OpenVINO provider in animejanai/inference. Upscaling only, no RIFE yet; SDR sources.")
-                        : "ONNX Runtime engine missing (libaji_ort.so). Normal playback remains available.")
+                        : "ONNX Runtime engine not installed: add \"ONNX Runtime engine\" in Components. Normal playback remains available.")
                     : AnimeJaNaiConf.VulkanSelected
                     ? (VulkanSelectable ? "Linux Vulkan: spatial SPAN AnimeJaNai and RIFE 4.6. SDR sources, even dimensions; CPU/GPU transfers."
                         : "Vulkan library missing. Normal playback remains available.")

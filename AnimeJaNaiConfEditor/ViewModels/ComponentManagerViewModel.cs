@@ -40,6 +40,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         {
             "trt-runtime" => "TensorRT runtime",
             "rife" => "RIFE interpolation models",
+            "onnxruntime" => "ONNX Runtime engine (OpenVINO, MIGraphX)",
             "trt-ptx" => "TensorRT kernels: other NVIDIA GPUs",
             _ when Name.StartsWith("trt-sm") => $"TensorRT kernels: {SmFamily(Name[6..])}",
             _ => Name,
@@ -49,6 +50,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         {
             "trt-runtime" => OperatingSystem.IsLinux() ? "Inference for NVIDIA GPUs. Without TensorRT, Linux keeps normal mpv playback." : "The fastest upscaling engine, for NVIDIA GPUs. Without it, NVIDIA users fall back to the slower DirectML engine.",
             "rife" => "Frame interpolation (e.g. 24 → 48 fps). Not needed if you only upscale.",
+            "onnxruntime" => "Upscaling on Intel GPUs (OpenVINO) and on AMD GPUs supported by ROCm (MIGraphX). Not needed with TensorRT or Vulkan.",
             "trt-ptx" => "Fallback kernels for NVIDIA GPUs without a dedicated kernel pack. First engine build is slower.",
             _ when Name.StartsWith("trt-sm") => "Engine-builder kernels matched to this GPU generation. Only needed on these GPUs.",
             _ => "",
@@ -178,7 +180,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
                     // for other GPU generations and the TensorRT stack on non-NVIDIA
                     // boxes are irrelevant here; the updater CLI still lists everything.
                     if (!item.Installed && !item.Recommended && !item.Preselect &&
-                        item.Name != "rife")
+                        item.Name != "rife" && item.Name != "onnxruntime")
                     {
                         continue;
                     }
