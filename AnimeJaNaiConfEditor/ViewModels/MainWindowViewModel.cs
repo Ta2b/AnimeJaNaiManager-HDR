@@ -1005,6 +1005,8 @@ chain_2_rife=no";
             }
 
             animeJaNaiConf.SetRifeEngine(parser.GetValue("global", "rife_engine", "new"));
+            animeJaNaiConf.RifeDrawings = !parser.GetValue("global", "rife_drawings", "yes").Trim()
+                .Equals("no", StringComparison.OrdinalIgnoreCase);
 
             // Subtitle rendering mode: "gpu" opts into the experimental GPU subtitle path
             // (the [subs-gpu] profile in mpv-animejanai.conf, applied at startup by
@@ -1314,6 +1316,7 @@ chain_2_rife=no";
             }
             parser.SetValue("global", "logging", conf.EnableLogging ? "yes" : "no");
             parser.SetValue("global", "rife_engine", conf.RifeEngine);
+            parser.SetValue("global", "rife_drawings", conf.RifeDrawings ? "yes" : "no");
             // Write-minimal: only persist default_slot when the user picked one (absent => the vf
             // line's baked-in Balanced slot applies).
             if (conf.DefaultSlot is int defaultSlot)
@@ -1649,6 +1652,10 @@ chain_2_rife=no";
                     {
                         Vm?.WriteAnimeJaNaiConf();
                     });
+                this.WhenAnyValue(x => x.RifeDrawings).Subscribe(x =>
+                {
+                    Vm?.WriteAnimeJaNaiConf();
+                });
 
             }
         }
@@ -2159,6 +2166,12 @@ chain_2_rife=no";
             RifeEngine = (value ?? "").Trim().ToLowerInvariant() == "old" ? "old" : "new";
         public bool RifeEngineNew { get => RifeEngine == "new"; set { if (value) SetRifeEngine("new"); else this.RaisePropertyChanged(); } }
         public bool RifeEngineOld { get => RifeEngine == "old"; set { if (value) SetRifeEngine("old"); else this.RaisePropertyChanged(); } }
+
+        // [global] rife_drawings: anime holds a drawing for two to four frames; with yes the motion
+        // to the next drawing is spread over that whole time instead of happening in one frame.
+        private bool _rifeDrawings = true;
+        [DataMember]
+        public bool RifeDrawings { get => _rifeDrawings; set => this.RaiseAndSetIfChanged(ref _rifeDrawings, value); }
 
         // Experimental GPU subtitle rendering ([global] sub_render_mode=gpu). Off => the player
         // uses the stable subtitle defaults from the managed [animejanai] profile.
