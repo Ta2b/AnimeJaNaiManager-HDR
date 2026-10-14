@@ -95,9 +95,16 @@ namespace AnimeJaNaiConfEditor.ViewModels
         // The ONNX Runtime engine; the vendor provider itself is only known at playback.
         public static bool OnnxRuntimeOnDisk() => OnLinux && File.Exists(Path.Combine(
             Environment.GetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR") ?? Path.Combine(DataDir, "inference"), "libaji_ort.so"));
-        public static bool NativeMiGraphXOnDisk() => !OnMac && File.Exists(Path.Combine(
-            Environment.GetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR") ?? Path.Combine(DataDir, "inference"),
-            OnLinux ? "libaji_migraphx_rgb.so" : "aji_migraphx.dll"));
+        public static bool NativeMiGraphXOnDisk()
+        {
+            if (OnMac) return false;
+            var folder = Environment.GetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR") ?? Path.Combine(DataDir, "inference");
+            if (!File.Exists(Path.Combine(folder, OnLinux ? "libaji_migraphx_rgb.so" : "aji_migraphx.dll"))) return false;
+            // The small module updates with the player; the optional Windows
+            // runtime must be installed before enabling its backend choice.
+            return OnLinux || File.Exists(Path.Combine(folder, "amd", "bin", "migraphx_c.dll")) ||
+                File.Exists(Path.Combine(folder, "migraphx_c.dll"));
+        }
         private bool _onnxRuntimeSelectable;
         public bool OnnxRuntimeSelectable { get => _onnxRuntimeSelectable; set => this.RaiseAndSetIfChanged(ref _onnxRuntimeSelectable, value); }
         public static bool VulkanRifeOnDisk() => File.Exists(Path.Combine(DataDir, "rife-vulkan", "rife-v4.6", "flownet.param")) &&
@@ -270,7 +277,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
                                 ? "Native MIGraphX + HIP for AMD: spatial upscaling and RIFE. Requires a compatible ROCm runtime and GPU; restart playback after changing the engine."
                                 : "Legacy ONNX Runtime/MIGraphX provider. Install the native AMD engine for the specialized GPU path.")
                             : "Experimental: OpenVINO for Intel GPUs. Needs an ONNX Runtime build with the OpenVINO provider in animejanai/inference. Upscaling only, no RIFE yet; SDR sources.")
-                        : "ONNX Runtime engine not installed: add \"ONNX Runtime engine\" in Components. Normal playback remains available.")
+                        : "ONNX Runtime engine not installed: add \"GPU engines\" in Components. Normal playback remains available.")
                     : AnimeJaNaiConf.VulkanSelected
                     ? (VulkanSelectable ? "Linux Vulkan: spatial SPAN AnimeJaNai and RIFE 4.6. SDR sources, even dimensions; CPU/GPU transfers."
                         : "Vulkan library missing. Normal playback remains available.")

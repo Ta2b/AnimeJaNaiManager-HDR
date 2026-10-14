@@ -1,7 +1,7 @@
 # AnimeJaNai Manager
 
 Native AMD integration (14 October 2026): MIGraphX + HIP is exposed on Windows
-and Linux when the native library is installed and the GPU is eligible. The
+and Linux when the native module, its Windows runtime and an eligible GPU are present. The
 optional GPU engines component carries the Windows runtime for RX 9070 XT;
 Linux needs a compatible system ROCm installation. Library presence enables the
 choice; driver/runtime compatibility is resolved when the player opens a model.
