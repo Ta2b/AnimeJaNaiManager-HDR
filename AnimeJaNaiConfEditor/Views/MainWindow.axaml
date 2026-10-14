@@ -405,6 +405,12 @@
                   <TextBlock Text="Maximum RIFE factor" Width="150" VerticalAlignment="Center" />
                   <NumericUpDown Value="{Binding HdrSettings.RifeMaxFactor}" Minimum="1" Maximum="8" Increment="1" FormatString="0" Width="120" />
                 </WrapPanel>
+                <WrapPanel>
+                  <TextBlock Text="RIFE interpolation engine" Width="200" VerticalAlignment="Center" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeEngineNew}" Content="New" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeEngineOld}" Content="Original" />
+                </WrapPanel>
+                <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="For profiles that interpolate before the upscale. New: the upscaler runs once per source frame and the frames in between are made by moving the two upscaled pictures with RIFE's motion, for the same picture and far less work. Original: every frame in between is interpolated, then upscaled. Only the engines that have the new method use it; the others keep the original one. Restart the player to apply." />
                 <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.GpuSubtitles}" Content="Render subtitles on GPU (experimental)" IsVisible="{Binding WindowsFeatures}" />
                 <TextBlock Classes="help" Text="Renderer and experimental playback changes require restarting the player. Frame generation stays off until explicitly enabled." />
                 <Expander Header="RTX Video controls" IsEnabled="{Binding RtxHdrSelectable}" IsExpanded="False">

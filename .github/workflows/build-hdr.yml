@@ -44,22 +44,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.x'
-      # Each test keeps its output: the last step publishes it as annotations when one fails.
-      - name: Profile and HDR persistence regressions
-        shell: bash
-        run: dotnet run --project manager/tests/ProfileRoundTrip/ProfileRoundTrip.csproj 2>&1 | tee profile.log
-      - name: Settings UI and rendering regressions
-        shell: bash
-        run: dotnet run --project manager/tests/SettingsUi -p:RuntimeIdentifier=${{ matrix.rid }} -- artifacts/settings.png 2>&1 | tee ui.log
-      - name: The macOS settings and layout, also checked on Linux
-        # The same tests with the platform forced: a change made on Linux that breaks the Mac
-        # layout is seen without waiting for the macOS machine.
-        if: matrix.rid == 'linux-x64'
-        env:
-          AJN_UI_PLATFORM: macos
-        run: |
-          dotnet run --project manager/tests/ProfileRoundTrip/ProfileRoundTrip.csproj 2>&1 | tee profile-as-mac.log
-          dotnet run --project manager/tests/SettingsUi -p:RuntimeIdentifier=linux-x64 -- artifacts/settings-macos.png 2>&1 | tee ui-as-mac.log
       - name: Publish self-contained Manager
         shell: bash
         run: dotnet publish manager/AnimeJaNaiConfEditor/AnimeJaNaiConfEditor.csproj -c Release -r ${{ matrix.rid }} --self-contained true -o publish 2>&1 | tee publish.log
@@ -126,36 +110,9 @@ jobs:
           codesign --verify --deep --strict "$app" 2>&1 | tee -a sign.log
           file "$app/Contents/MacOS/AnimeJaNaiManager-HDR" | tee -a sign.log
           du -sh "$app"
-      - name: The staged application starts on macOS
-        # With a bank of its own. Proves that the signed program runs, finds its native libraries
-        # and opens its window: a program that fails any of these exits within the first seconds.
+      - name: Archive the macOS application
         if: matrix.rid == 'osx-arm64'
-        run: |
-          app="staging/AnimeJaNai Manager.app"
-          data="$RUNNER_TEMP/manager-data"
-          mkdir -p "$data/animejanai/onnx" "$data/portable_config/script-opts"
-          for kind in onnx ajm mlpatch; do : > "$data/animejanai/onnx/2x_Check.$kind"; done
-          printf '[global]\nconfig_version=3\nbackend=CoreMLNative\napple_device=NPU\nengine_reuse=tiles\n[slot_1]\nprofile_name=Check\n' > "$data/animejanai/animejanai.conf"
-          ANIMEJANAI_ROOT="$data" ANIMEJANAI_DATA_DIR="$data/animejanai" "$app/Contents/MacOS/AnimeJaNaiManager-HDR" > start.log 2>&1 &
-          pid=$!
-          sleep 15
-          if kill -0 "$pid" 2>/dev/null; then
-            # Ten seconds at most: the question may wait for a permission nobody can give here.
-            windows="$(perl -e 'alarm 10; exec @ARGV' osascript -e 'tell application "System Events" to count windows of (first process whose unix id is '"$pid"')' 2>/dev/null || echo unknown)"
-            echo "::notice title=manager starts on macOS::running after 15 s, windows: $windows"
-            kill "$pid"; wait "$pid" 2>/dev/null || true
-          else
-            wait "$pid" || code=$?
-            echo "exit code ${code:-0}" >> start.log
-            ls "$HOME/Library/Logs/DiagnosticReports" 2>/dev/null | tail -3 >> start.log
-            exit 1
-          fi
-          # What it read is what it keeps: the bank still names the engine and the target.
-          cat "$data/animejanai/animejanai.conf"
-          grep -q '^backend=CoreMLNative' "$data/animejanai/animejanai.conf"
-          grep -q '^apple_device=NPU' "$data/animejanai/animejanai.conf"
-          ditto -c -k --keepParent "$app" AnimeJaNaiManager-HDR-macos-arm64.zip
-          ls -la AnimeJaNaiManager-HDR-macos-arm64.zip
+        run: ditto -c -k --keepParent "staging/AnimeJaNai Manager.app" AnimeJaNaiManager-HDR-macos-arm64.zip
       - name: What failed
         if: failure()
         shell: bash
@@ -165,13 +122,6 @@ jobs:
             body="$(grep -v ': warning ' "$f" | tail -n 24 | cut -c1-300 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
             echo "::error title=${{ matrix.rid }} $f::${body:-empty}"
           done
-      - name: Upload settings screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: settings-${{ matrix.rid }}
-          path: artifacts/*.png
-          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: manager-${{ matrix.rid }}

@@ -1004,6 +1004,8 @@ chain_2_rife=no";
                 animeJaNaiConf.DefaultSlot = defaultSlot;
             }
 
+            animeJaNaiConf.SetRifeEngine(parser.GetValue("global", "rife_engine", "new"));
+
             // Subtitle rendering mode: "gpu" opts into the experimental GPU subtitle path
             // (the [subs-gpu] profile in mpv-animejanai.conf, applied at startup by
             // scripts/animejanai_backend.lua). Anything else (including the absent key)
@@ -1311,6 +1313,7 @@ chain_2_rife=no";
                 parser.SetValue("global", "engine_boost", conf.EngineBoost ? "yes" : "no");
             }
             parser.SetValue("global", "logging", conf.EnableLogging ? "yes" : "no");
+            parser.SetValue("global", "rife_engine", conf.RifeEngine);
             // Write-minimal: only persist default_slot when the user picked one (absent => the vf
             // line's baked-in Balanced slot applies).
             if (conf.DefaultSlot is int defaultSlot)
@@ -1641,6 +1644,7 @@ chain_2_rife=no";
                     x => x.BalancedSharp,
                     x => x.PerformanceSharp,
                     x => x.GpuSubtitles,
+                    x => x.RifeEngine,
                     x => x.AutoDisplayRefresh).Subscribe(x =>
                     {
                         Vm?.WriteAnimeJaNaiConf();
@@ -2134,6 +2138,27 @@ chain_2_rife=no";
             get => _backendAutoFallback;
             set => this.RaiseAndSetIfChanged(ref _backendAutoFallback, value);
         }
+
+        // [global] rife_engine: how the frames between two source frames are made by a profile
+        // that interpolates before the upscale. new: the upscaler runs once per source frame and
+        // the in-between frames are the two upscaled pictures moved by RIFE's motion. old: every
+        // in-between frame is interpolated, then upscaled. Read by the engines that have both.
+        private string _rifeEngine = "new";
+        [DataMember]
+        public string RifeEngine
+        {
+            get => _rifeEngine;
+            private set
+            {
+                this.RaiseAndSetIfChanged(ref _rifeEngine, value);
+                this.RaisePropertyChanged(nameof(RifeEngineNew));
+                this.RaisePropertyChanged(nameof(RifeEngineOld));
+            }
+        }
+        public void SetRifeEngine(string? value) =>
+            RifeEngine = (value ?? "").Trim().ToLowerInvariant() == "old" ? "old" : "new";
+        public bool RifeEngineNew { get => RifeEngine == "new"; set { if (value) SetRifeEngine("new"); else this.RaisePropertyChanged(); } }
+        public bool RifeEngineOld { get => RifeEngine == "old"; set { if (value) SetRifeEngine("old"); else this.RaisePropertyChanged(); } }
 
         // Experimental GPU subtitle rendering ([global] sub_render_mode=gpu). Off => the player
         // uses the stable subtitle defaults from the managed [animejanai] profile.
