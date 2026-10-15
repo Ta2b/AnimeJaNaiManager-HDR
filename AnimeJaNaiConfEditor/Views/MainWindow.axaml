@@ -407,12 +407,12 @@
                 </WrapPanel>
                 <WrapPanel>
                   <TextBlock Text="RIFE interpolation engine" Width="200" VerticalAlignment="Center" />
-                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeEngineNew}" Content="New" />
-                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeEngineOld}" Content="Original" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeEngineFast}" Content="Fast" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeEngineQuality}" Content="Quality" />
                 </WrapPanel>
-                <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="For profiles that interpolate before the upscale. New: the upscaler runs once per source frame and the frames in between are made by moving the two upscaled pictures with RIFE's motion, for the same picture and far less work. Original: every frame in between is interpolated, then upscaled. Only the engines that have the new method use it; the others keep the original one. Restart the player to apply." />
-                <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.RifeDrawings}" Content="Spread the motion over held drawings" />
-                <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="Anime holds each drawing for two to four frames. On: the motion to the next drawing is spread over that whole time, so characters move continuously instead of jumping then stopping. Off: frame-to-frame interpolation. Needs an engine that supports it (the NVIDIA engine with the new RIFE engine); restart the player to apply." />
+                <TextBlock Classes="help" TextWrapping="Wrap" Text="Quality: full RIFE prediction for every intermediate frame, followed by the configured upscale; no motion extrapolation, approximate drawing reuse or held-drawing retiming. Fast: reuse upscaled sources and motion when supported, with possible visual differences. Both keep execution optimizations. Restart playback to apply." />
+                <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.RifeDrawings}" IsEnabled="{Binding AnimeJaNaiConf.RifeEngineFast}" Content="Spread the motion over held drawings" />
+                <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="Anime holds each drawing for two to four frames. On: the motion to the next drawing is spread over that whole time, so characters move continuously instead of jumping then stopping. Off: frame-to-frame interpolation. Fast mode only, on engines that support it; Quality ignores this option; restart the player to apply." />
                 <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.GpuSubtitles}" Content="Render subtitles on GPU (experimental)" IsVisible="{Binding WindowsFeatures}" />
                 <TextBlock Classes="help" Text="Renderer and experimental playback changes require restarting the player. Frame generation stays off until explicitly enabled." />
                 <Expander Header="RTX Video controls" IsEnabled="{Binding RtxHdrSelectable}" IsExpanded="False">

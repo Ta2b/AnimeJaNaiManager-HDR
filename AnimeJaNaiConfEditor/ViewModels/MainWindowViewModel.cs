@@ -1026,7 +1026,7 @@ chain_2_rife=no";
                 animeJaNaiConf.DefaultSlot = defaultSlot;
             }
 
-            animeJaNaiConf.SetRifeEngine(parser.GetValue("global", "rife_engine", "new"));
+            animeJaNaiConf.SetRifeEngine(parser.GetValue("global", "rife_engine", "fast"));
             animeJaNaiConf.RifeDrawings = !parser.GetValue("global", "rife_drawings", "yes").Trim()
                 .Equals("no", StringComparison.OrdinalIgnoreCase);
 
@@ -2169,25 +2169,26 @@ chain_2_rife=no";
         }
 
         // [global] rife_engine: how the frames between two source frames are made by a profile
-        // that interpolates before the upscale. new: the upscaler runs once per source frame and
-        // the in-between frames are the two upscaled pictures moved by RIFE's motion. old: every
+        // that interpolates before the upscale. fast: the upscaler runs once per source frame and
+        // the in-between frames are the two upscaled pictures moved by RIFE's motion. quality: every
         // in-between frame is interpolated, then upscaled. Read by the engines that have both.
-        private string _rifeEngine = "new";
+        private string _rifeEngine = "fast";
         [DataMember]
         public string RifeEngine
         {
             get => _rifeEngine;
             private set
             {
-                this.RaiseAndSetIfChanged(ref _rifeEngine, value);
-                this.RaisePropertyChanged(nameof(RifeEngineNew));
-                this.RaisePropertyChanged(nameof(RifeEngineOld));
+                var canonical = (value ?? "").Trim().ToLowerInvariant() is "old" or "quality" ? "quality" : "fast";
+                this.RaiseAndSetIfChanged(ref _rifeEngine, canonical);
+                this.RaisePropertyChanged(nameof(RifeEngineFast));
+                this.RaisePropertyChanged(nameof(RifeEngineQuality));
             }
         }
         public void SetRifeEngine(string? value) =>
-            RifeEngine = (value ?? "").Trim().ToLowerInvariant() == "old" ? "old" : "new";
-        public bool RifeEngineNew { get => RifeEngine == "new"; set { if (value) SetRifeEngine("new"); else this.RaisePropertyChanged(); } }
-        public bool RifeEngineOld { get => RifeEngine == "old"; set { if (value) SetRifeEngine("old"); else this.RaisePropertyChanged(); } }
+            RifeEngine = (value ?? "").Trim().ToLowerInvariant() is "old" or "quality" ? "quality" : "fast";
+        public bool RifeEngineFast { get => RifeEngine == "fast"; set { if (value) SetRifeEngine("fast"); else this.RaisePropertyChanged(); } }
+        public bool RifeEngineQuality { get => RifeEngine == "quality"; set { if (value) SetRifeEngine("quality"); else this.RaisePropertyChanged(); } }
 
         // [global] rife_drawings: anime holds a drawing for two to four frames; with yes the motion
         // to the next drawing is spread over that whole time instead of happening in one frame.

@@ -1,5 +1,11 @@
 # AnimeJaNai Manager
 
+RIFE now exposes **Quality** (full per-instant prediction and configured upscale,
+without approximate drawing reuse or retiming) and **Fast** (upscaled endpoint
+warping and supported temporal shortcuts). Execution optimizations apply to both.
+`rife_engine=old/new` remains readable as `quality/fast`; saved banks use the new
+names. Fast keeps the previous default. Restart playback after changing modes.
+
 Native AMD integration (14 October 2026): MIGraphX + HIP is exposed on Windows
 and Linux when the native module, its Windows runtime and an eligible GPU are present. The
 optional GPU engines component carries the Windows runtime for RX 9070 XT;
