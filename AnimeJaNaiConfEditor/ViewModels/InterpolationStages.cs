@@ -85,7 +85,7 @@ public partial class UpscaleChain
             if (TryLegacyProjection(out _)) return "Lossless legacy-compatible layout: the existing reader arithmetic and screen synchronization are retained.";
             var n=plan.OutputCadence(new(1,1));
             if (n.Denominator!=1 || n.Numerator>16) return "This mixed cadence is unavailable: the current Linux reader requires integer stage factors and a cumulative factor ≤16.";
-            return "Explicit mixed cadence. Linux NVIDIA/TensorRT reader required; GPU/color capability negotiated at playback. FRUC is Fast SDR 8-bit with known contour/mouth artifacts. No TrueHDR tagging on mixed chains.";
+            return "Explicit mixed cadence. Linux NVIDIA/TensorRT reader required; GPU/color capability negotiated at playback. FRUC can produce severe artifacts on flashes and occlusions. No TrueHDR tagging on mixed chains.";
         }
     }
     public void LoadPipeline(IReadOnlyDictionary<string,string> section,string backend,string policy)
@@ -290,7 +290,7 @@ public sealed class InterpolationStage : ReactiveObject
     public string ModeNotice => Method switch {
         "rife" when Policy=="quality" => "Full RIFE prediction (reference).",
         "rife" when Policy=="fast" => "Motion shortcuts can alter contours.",
-        "nvidia-fruc" => "SDR8 ×2. Artifacts on contours and mouths are possible.",
+        "nvidia-fruc" => "SDR8 ×2. Artifacts can be severe on flashes, fast light changes and occlusions. Prefer RIFE for these scenes.",
         _ => ""
     };
 
