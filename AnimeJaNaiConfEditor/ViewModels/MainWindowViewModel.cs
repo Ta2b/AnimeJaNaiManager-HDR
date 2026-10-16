@@ -92,6 +92,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         private string _expectedHash = "";
         private string _expectedBank = "";
         private readonly object _profileSaveLock = new();
+        private int _profileReadDepth;
         public static bool TrtOnDisk() => File.Exists(Path.Combine(
             Environment.GetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR") ?? Path.Combine(DataDir, "inference"),
             OnLinux ? "libnvinfer.so.11" : "nvinfer_11.dll"));
@@ -341,6 +342,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 foreach (var chain in slot.Chains)
                 {
                     chain.RaisePropertyChanged(nameof(UpscaleChain.RifeToggleEnabled));
+                    chain.RefreshPipeline();
                 }
             }
         }
@@ -831,6 +833,7 @@ chain_2_rife=no";
                         chain.RifeModel = chain.RifeModelList.Contains(preferred) ? preferred : chain.RifeModelList[^1];
                     }
                     chain.RaisePropertyChanged(nameof(UpscaleChain.RifeToggleEnabled));
+                    chain.RefreshPipeline();
                 }
         }
 
@@ -990,6 +993,8 @@ chain_2_rife=no";
 
         public AnimeJaNaiConf ReadAnimeJaNaiConf(ConfigParser parser, bool autoSave = false)
         {
+            _profileReadDepth++;
+            using var reading = System.Reactive.Disposables.Disposable.Create(() => _profileReadDepth--);
             var animeJaNaiConf = new AnimeJaNaiConf(autoSave) { Vm = this };
             var slots = new Dictionary<string, UpscaleSlot>();
 
@@ -1166,6 +1171,9 @@ chain_2_rife=no";
                         chains[currentChainNumber].Models = new AvaloniaList<UpscaleModel>(models[currentChainNumber].Values.ToList());
                     }
 
+                    foreach (var chain in chains.Values)
+                        chain.LoadPipeline(section.Keys.ToDictionary(k => k.Name, k => parser.GetValue(section.SectionName, k.Name)), animeJaNaiConf.SelectedBackend.ToString(), animeJaNaiConf.RifeEngine);
+
                     slots[currentSlotNumber] = new UpscaleSlot(autoSave)
                     {
                         Vm = this,
@@ -1188,6 +1196,8 @@ chain_2_rife=no";
 
         public void ReadAnimeJaNaiConfToCurrentSlot(ConfigParser parser, bool autoSave = false)
         {
+            _profileReadDepth++;
+            using var reading = System.Reactive.Disposables.Disposable.Create(() => _profileReadDepth--);
             var sectionKey = "slot";
 
             foreach (var section in parser.Sections)
@@ -1281,10 +1291,15 @@ chain_2_rife=no";
                     chains[currentChainNumber].Models = new AvaloniaList<UpscaleModel>(models[currentChainNumber].Values.ToList());
                 }
 
+                foreach (var chain in chains.Values)
+                    chain.LoadPipeline(section.Keys.ToDictionary(k => k.Name, k => parser.GetValue(section.SectionName, k.Name)), AnimeJaNaiConf.SelectedBackend.ToString(), AnimeJaNaiConf.RifeEngine);
+
                 CurrentSlot.Vm = this;
                 CurrentSlot.ProfileName = parser.GetValue(sectionKey, "profile_name", "New Profile");
                 CurrentSlot.Chains = new AvaloniaList<UpscaleChain>(chains.Values.ToList());
             }
+            reading.Dispose();
+            if (autoSave) WriteAnimeJaNaiConf();
         }
 
         static bool ParseBool(string value)
@@ -1294,8 +1309,11 @@ chain_2_rife=no";
 
         public void WriteAnimeJaNaiConf()
         {
+            if (_profileReadDepth>0 || AnimeJaNaiConf?.UpscaleSlots.Any(s => s.Chains.Any(c => c.PipelineEditing)) == true) return;
+            foreach (var slot in AnimeJaNaiConf?.UpscaleSlots ?? [])
+                foreach (var chain in slot.Chains) chain.RefreshPipeline();
             try { WriteAnimeJaNaiConf(AnimeJaNaiConfPath); }
-            catch (IOException e) { BackendNotice = e.Message; }
+            catch (Exception e) when (e is IOException or InvalidDataException) { BackendNotice = e.Message; }
         }
 
         public void WriteAnimeJaNaiConf(string fullPath)
@@ -1394,6 +1412,8 @@ chain_2_rife=no";
                     parser.SetValue(section, $"chain_{chain.ChainNumber}_min_fps", string.Create(ENGLISH_CULTURE, $"{chain.MinFps}"));
                     parser.SetValue(section, $"chain_{chain.ChainNumber}_max_fps", string.Create(ENGLISH_CULTURE, $"{chain.MaxFps}"));
 
+                    if (chain.OrderedPipeline) { chain.WritePipeline(parser, section); continue; }
+
                     foreach (var model in chain.Models)
                     {
                         parser.SetValue(section, $"chain_{chain.ChainNumber}_model_{model.ModelNumber}_resize_height_before_upscale", string.Create(ENGLISH_CULTURE, $"{model.ResizeHeightBeforeUpscale}"));
@@ -1447,6 +1467,8 @@ chain_2_rife=no";
                 parser.SetValue(section, $"chain_{chain.ChainNumber}_max_resolution", string.Create(ENGLISH_CULTURE, $"{chain.MaxResolution}"));
                 parser.SetValue(section, $"chain_{chain.ChainNumber}_min_fps", string.Create(ENGLISH_CULTURE, $"{chain.MinFps}"));
                 parser.SetValue(section, $"chain_{chain.ChainNumber}_max_fps", string.Create(ENGLISH_CULTURE, $"{chain.MaxFps}"));
+
+                if (chain.OrderedPipeline) { chain.WritePipeline(parser, section); continue; }
 
                 foreach (var model in chain.Models)
                 {
@@ -2325,7 +2347,7 @@ chain_2_rife=no";
     }
 
     [DataContract]
-    public class UpscaleChain : ReactiveObject
+    public partial class UpscaleChain : ReactiveObject
     {
         public UpscaleChain(bool autoSave = false)
         {

@@ -302,7 +302,8 @@ namespace AnimeJaNaiConfEditor.Views
 
                     if (outPath != null)
                     {
-                        vm.WriteAnimeJaNaiConf(outPath);
+                        try { vm.WriteAnimeJaNaiConf(outPath); }
+                        catch (Exception error) when (error is IOException or InvalidDataException) { vm.BackendNotice = error.Message; }
                     }
 
                 }
@@ -336,7 +337,8 @@ namespace AnimeJaNaiConfEditor.Views
 
                     if (outPath != null)
                     {
-                        vm.WriteAnimeJaNaiCurrentProfileConf(outPath);
+                        try { vm.WriteAnimeJaNaiCurrentProfileConf(outPath); }
+                        catch (Exception error) when (error is IOException or InvalidDataException) { vm.BackendNotice = error.Message; }
                     }
                 }
             }

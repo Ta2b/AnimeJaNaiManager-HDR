@@ -1,0 +1,71 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AnimeJaNaiConfEditor.ViewModels" xmlns:ui="clr-namespace:FluentAvalonia.UI.Controls;assembly=FluentAvalonia"
+             x:Class="AnimeJaNaiConfEditor.Views.InterpolationStages" x:DataType="vm:UpscaleChain">
+  <StackPanel Margin="10,10,10,10" Spacing="8">
+    <CheckBox Name="OrderedStagesToggle" Content="Ordered interpolation and upscaling stages" IsChecked="{Binding OrderedPipeline}" IsEnabled="{Binding CanUseLegacyEditor}"
+              ToolTip.Tip="Legacy settings can be converted losslessly. A mixed layout must first be reduced to a single RIFE before/after the upscalers to return to the legacy editor." />
+    <TextBlock Text="{Binding PipelineNotice}" TextWrapping="Wrap" />
+    <StackPanel IsVisible="{Binding OrderedPipeline}" Spacing="8">
+      <TextBlock Name="OrderedCadence" Text="{Binding PipelineCadence}" FontWeight="SemiBold" />
+      <ItemsControl Name="OrderedStages" ItemsSource="{Binding Stages}" IsEnabled="{Binding PipelineEditable}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:InterpolationStage">
+            <Border BorderBrush="Gray" BorderThickness="1" CornerRadius="4" Padding="10" Margin="0,0,0,8">
+              <StackPanel Spacing="6">
+                <DockPanel>
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="5">
+                    <Button Content="↑" Command="{Binding MoveUp}" IsEnabled="{Binding CanMoveUp}" ToolTip.Tip="Move stage up" />
+                    <Button Content="↓" Command="{Binding MoveDown}" IsEnabled="{Binding CanMoveDown}" ToolTip.Tip="Move stage down" />
+                    <Button Content="Remove stage" Command="{Binding Remove}" />
+                  </StackPanel>
+                  <TextBlock Text="{Binding Header}" VerticalAlignment="Center" FontWeight="SemiBold" />
+                </DockPanel>
+                <WrapPanel>
+                  <CheckBox Margin="0,0,12,0" Content="Active" IsChecked="{Binding Enabled}" IsEnabled="{Binding CanEnable}" />
+                  <ComboBox Width="160" ItemsSource="{Binding MethodChoices}" SelectedValue="{Binding MethodChoice}" />
+                  <TextBlock Margin="10,0,5,0" Text="Policy" VerticalAlignment="Center" />
+                  <ComboBox Width="100" ItemsSource="{Binding PolicyChoices}" SelectedValue="{Binding Policy}" />
+                </WrapPanel>
+                <Grid ColumnDefinitions="150,*" IsVisible="{Binding !IsFruc}">
+                  <TextBlock Text="Model / variant" VerticalAlignment="Center" />
+                  <ui:FAComboBox Grid.Column="1" IsEditable="True" Text="{Binding Model, Mode=TwoWay}" ItemsSource="{Binding ModelChoices}" />
+                </Grid>
+                <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsInterpolation}">
+                  <TextBlock Width="144" Text="Frame-rate factor" VerticalAlignment="Center" />
+                  <TextBox Name="StageNumerator" Width="65" Text="{Binding Numerator}" />
+                  <TextBlock Text="/" VerticalAlignment="Center" />
+                  <TextBox Name="StageDenominator" Width="65" Text="{Binding Denominator}" />
+                </StackPanel>
+                <WrapPanel IsVisible="{Binding IsRife}">
+                  <CheckBox Content="Ensemble" IsChecked="{Binding Ensemble}" Margin="0,0,15,0" />
+                  <TextBlock Text="Scene threshold" VerticalAlignment="Center" Margin="0,0,5,0" />
+                  <TextBox Width="90" Text="{Binding SceneThreshold}" />
+                </WrapPanel>
+                <StackPanel Spacing="5" IsVisible="{Binding IsFruc}">
+                  <TextBlock Text="Fast SDR8bit synthesis. Install the NVIDIA SDK separately; use its compatible CUDART11. Absolute file paths required." TextWrapping="Wrap" />
+                  <Grid ColumnDefinitions="150,*"><TextBlock Text="SDK libNvOFFRUC.so" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding SdkLibrary}" /></Grid>
+                  <Grid ColumnDefinitions="150,*"><TextBlock Text="SDK CUDA runtime" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding SdkRuntime}" /></Grid>
+                  <Grid ColumnDefinitions="150,*"><TextBlock Text="aji_fruc.fatbin" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding KernelFatbin}" /></Grid>
+                </StackPanel>
+                <StackPanel Spacing="5" IsVisible="{Binding IsUpscale}">
+                  <Grid ColumnDefinitions="150,*"><TextBlock Text="Resize height (0=off)" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding ResizeHeight}" /></Grid>
+                  <Grid ColumnDefinitions="150,*"><TextBlock Text="Resize factor (%)" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding ResizeFactor}" /></Grid>
+                  <TextBlock Text="Spatial ONNX models in a mixed chain; temporal models retain their legacy route." TextWrapping="Wrap" />
+                </StackPanel>
+                <TextBlock Text="{Binding Availability}" TextWrapping="Wrap" Foreground="Orange" />
+                <Expander Header="Stage details"><StackPanel><TextBlock Text="{Binding Id, StringFormat='Stable ID: {0}'}" /><TextBlock Text="{Binding OptionsText}" TextWrapping="Wrap" /></StackPanel></Expander>
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <WrapPanel IsEnabled="{Binding PipelineEditable}">
+        <Button Content="Add RIFE" Command="{Binding AddRifeStage}" Margin="0,0,8,0" />
+        <Button Content="Add NVIDIA FRUC" Command="{Binding AddFrucStage}" Margin="0,0,8,0" />
+        <Button Content="Add ONNX upscale" Command="{Binding AddUpscaleStage}" />
+      </WrapPanel>
+      <TextBlock Text="New stages start inactive. Complete their files/settings before activation. Moving an active stage changes processing order; factors multiply." TextWrapping="Wrap" />
+      <Expander Header="Other interpolation methods"><TextBlock Text="{Binding OtherInterpolationMethods}" TextWrapping="Wrap" /></Expander>
+    </StackPanel>
+  </StackPanel>
+</UserControl>
