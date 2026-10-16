@@ -53,9 +53,11 @@
   </ItemGroup>
   <PropertyGroup>
     <PlatformSource Condition="'$(PlatformSource)' == ''">../../mpv-AnimeJaNai-HDR/AnimeJaNaiPlatform/PlatformServices.cs</PlatformSource>
+    <ReferenceExporterSource Condition="'$(ReferenceExporterSource)' == ''">../../mpv-AnimeJaNai-HDR/AnimeJaNaiPlatform/ReferenceExporter.cs</ReferenceExporterSource>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(PlatformSource)" Link="PlatformServices.cs" />
+    <Compile Include="$(ReferenceExporterSource)" Link="ReferenceExporter.cs" />
   </ItemGroup>
   <!-- Keep native graphics libraries even when incremental single-file publishing
        skips GenerateBundle and loses its excluded-native-file list. -->

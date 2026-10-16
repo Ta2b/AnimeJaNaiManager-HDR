@@ -251,6 +251,27 @@ namespace AnimeJaNaiConfEditor.Views
             }
         }
 
+        private async void ExportReferenceButtonClick(object? sender, RoutedEventArgs e)
+        {
+            if (DataContext is not MainWindowViewModel vm || !vm.Reference.CanExport) return;
+            var selected = vm.Reference.SelectedSession;
+            try
+            {
+                var topLevel = GetTopLevel(this) ?? throw new InvalidOperationException("Reference window is unavailable.");
+                var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+                {
+                    Title = "Export playback reference", DefaultExtension = "json",
+                    SuggestedFileName = "animejanai-reference-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".json",
+                    FileTypeChoices = new FilePickerFileType[] { new("JSON reference") { Patterns = new[] { "*.json" } } },
+                });
+                if (file == null) return;
+                string? path = file.TryGetLocalPath();
+                if (path == null) vm.Reference.DestinationError("Choose a local JSON destination.");
+                else await vm.Reference.ExportAsync(path, selected);
+            }
+            catch (Exception error) { vm.Reference.DestinationError(error.Message); }
+        }
+
         private async void ExportFullConfButtonClick(object? sender, RoutedEventArgs e)
         {
             if (DataContext is MainWindowViewModel vm)

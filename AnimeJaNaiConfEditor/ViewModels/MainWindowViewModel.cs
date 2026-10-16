@@ -21,6 +21,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         private static readonly CultureInfo ENGLISH_CULTURE = CultureInfo.GetCultureInfo("en-US");
 
         public static MainWindowViewModel? Instance { get; private set; }
+        public ReferenceExportViewModel Reference { get; } = new(() => RootDir);
 
         public MainWindowViewModel()
         {

@@ -945,5 +945,21 @@
       </StackPanel>
     </ScrollViewer>
   </TabItem>
+  <TabItem Header="Reference">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Margin="24" Spacing="12" MaxWidth="900" HorizontalAlignment="Left">
+        <TextBlock Text="Export playback reference" FontSize="18" FontWeight="SemiBold"/>
+        <TextBlock Text="Choose an open video session. The report describes the playback observed in the player, including its active chain and available file fingerprints. Unsaved settings in this editor are not applied." TextWrapping="Wrap"/>
+        <Button Content="Refresh sessions" Command="{Binding Reference.Refresh}" IsEnabled="{Binding Reference.NotBusy}"/>
+        <ComboBox ItemsSource="{Binding Reference.Sessions}" SelectedItem="{Binding Reference.SelectedSession}" IsEnabled="{Binding Reference.NotBusy}" MinWidth="350" HorizontalAlignment="Stretch">
+          <ComboBox.ItemTemplate>
+            <DataTemplate><TextBlock Text="{ReflectionBinding Label}" TextWrapping="Wrap"/></DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <Button Content="Export reference JSON…" Click="ExportReferenceButtonClick" IsEnabled="{Binding Reference.CanExport}"/>
+        <TextBlock Text="{Binding Reference.Status}" TextWrapping="Wrap"/>
+      </StackPanel>
+    </ScrollViewer>
+  </TabItem>
   </TabControl>
 </Window>
