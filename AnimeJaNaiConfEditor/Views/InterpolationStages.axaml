@@ -22,10 +22,14 @@
       <WrapPanel IsEnabled="{Binding PipelineEditable}">
         <Button Content="Add interpolation" Command="{Binding AddInterpolationStage}" Margin="0,0,8,0" />
         <Button Content="Add upscale" Command="{Binding AddUpscaleStage}" Margin="0,0,8,0" />
-        <Button Content="Add downscale" IsEnabled="False" ToolTip.Tip="A compatible downscale reader is required." Margin="0,0,8,0" />
+        <Button Content="Add downscale" Command="{Binding AddDownscaleStage}" Margin="0,0,8,0" />
         <Button Content="Add HDR" IsEnabled="False" ToolTip.Tip="A compatible HDR stage is required." />
       </WrapPanel>
       <Button Content="Install optional engines…" Command="{Binding ShowOptionalEngines}" HorizontalAlignment="Left" />
+      <StackPanel IsVisible="{Binding HasImportedResize}" Spacing="4">
+        <TextBlock Text="This imported chain still uses its original pre-upscale resize. Moving it into Downscale keeps its position but changes resampling to Area." TextWrapping="Wrap" />
+        <Button Content="Move imported resize into Downscale" Command="{Binding SplitImportedResize}" IsEnabled="{Binding CanSplitImportedResize}" HorizontalAlignment="Left" />
+      </StackPanel>
       <ItemsControl Name="OrderedStages" ItemsSource="{Binding Stages}" IsEnabled="{Binding PipelineEditable}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:InterpolationStage">
@@ -57,7 +61,7 @@
                   </StackPanel>
                 </WrapPanel>
                 <TextBlock Text="{Binding ModeNotice}" TextWrapping="Wrap" />
-                <Grid ColumnDefinitions="150,*" IsVisible="{Binding !IsFruc}">
+                <Grid ColumnDefinitions="150,*" IsVisible="{Binding HasModel}">
                   <TextBlock Text="Model / variant" VerticalAlignment="Center" />
                   <ui:FAComboBox Grid.Column="1" IsEditable="True" Text="{Binding Model, Mode=TwoWay}" ItemsSource="{Binding ModelChoices}" />
                 </Grid>
@@ -74,13 +78,10 @@
                 </WrapPanel></Expander>
                 <Button Content="Use installed SDK" Command="{Binding UseInstalledSdk}" IsVisible="{Binding CanUseInstalledSdk}" HorizontalAlignment="Left" />
                 <TextBlock IsVisible="{Binding IsFruc}" Text="SDK paths are managed automatically. Existing custom profile paths are preserved in Stage details." TextWrapping="Wrap" />
-                <StackPanel Spacing="5" IsVisible="{Binding IsUpscale}">
-                  <Expander Header="Imported pre-upscale resize" IsVisible="{Binding HasAttachedResize}"><StackPanel Spacing="5">
-                  <Grid ColumnDefinitions="150,*"><TextBlock Text="Pre-upscale height" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding ResizeHeight}" /></Grid>
-                  <Grid ColumnDefinitions="150,*"><TextBlock Text="Pre-upscale size (%)" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding ResizeFactor}" /></Grid>
-                  <TextBlock Text="This resize runs immediately before this upscaler (height 0 and size 100% disable it). An interpolation stage above this upscaler runs before its resize." TextWrapping="Wrap" />
-                  </StackPanel></Expander>
-                </StackPanel>
+                <Grid ColumnDefinitions="150,*" IsVisible="{Binding IsResize}">
+                  <ComboBox ItemsSource="{Binding ResizeUnitChoices}" SelectedItem="{Binding ResizeUnit}" />
+                  <TextBox Name="DownscaleHeight" Grid.Column="1" Text="{Binding ResizeValue}" />
+                </Grid>
                 <TextBlock Text="{Binding AvailabilityLabel}" ToolTip.Tip="{Binding Availability}" TextWrapping="Wrap" />
                 <Expander Header="Stage details"><StackPanel><TextBlock Text="{Binding Id, StringFormat='Stable ID: {0}'}" /><TextBlock Text="{Binding OptionsText}" TextWrapping="Wrap" /></StackPanel></Expander>
               </StackPanel>

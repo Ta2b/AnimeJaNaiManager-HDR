@@ -1358,6 +1358,9 @@ chain_2_rife=no";
                 return null;
             }
 
+            foreach(var profile in conf.UpscaleSlots)
+                if(profile.Chains.Sum(c=>c.Stages.Count(s=>s.Kind=="hdr"))>1)
+                    throw new InvalidDataException("Only one HDR conversion stage is allowed per profile, across all its chains.");
             var parser = new ConfigParser();
 
             parser.SetValue("global", "config_version", CONFIG_VERSION.ToString());
