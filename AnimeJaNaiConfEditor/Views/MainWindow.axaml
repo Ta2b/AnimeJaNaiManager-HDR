@@ -422,7 +422,7 @@
                       <NumericUpDown Value="{Binding HdrSettings.RtxVsrQuality}" Minimum="1" Maximum="4" Increment="1" FormatString="0" Width="110" />
                     </WrapPanel>
                     <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.SkipHeldFrames}" Content="Reuse identical held frames" />
-                    <TextBlock Classes="help" Text="These controls apply to the NVIDIA engine with Vulkan rendering. Contrast, saturation and middle grey are in the HDR section: they are shared with the mpv conversion." />
+                    <TextBlock Classes="help" Text="{Binding VulkanPresentationNotice}" />
                   </StackPanel>
                 </Expander>
               </StackPanel>

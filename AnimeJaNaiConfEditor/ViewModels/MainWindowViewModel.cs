@@ -135,6 +135,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         }
 
         public bool HasBackendNotice => !string.IsNullOrEmpty(BackendNotice);
+        public string VulkanPresentationNotice => AnimeJaNai.Platform.BackendCapabilities.VulkanPresentation;
 
         private bool _rifeMissing;
         public bool RifeMissing
@@ -276,12 +277,12 @@ namespace AnimeJaNaiConfEditor.ViewModels
                             ? (NativeMiGraphXOnDisk()
                                 ? "Native MIGraphX + HIP for AMD: spatial upscaling and RIFE. Requires a compatible ROCm runtime and GPU; restart playback after changing the engine."
                                 : "Legacy ONNX Runtime/MIGraphX provider. Install the native AMD engine for the specialized GPU path.")
-                            : "Experimental: OpenVINO for Intel GPUs. Needs an ONNX Runtime build with the OpenVINO provider in animejanai/inference. Upscaling only, no RIFE yet; SDR sources.")
+                            : AnimeJaNai.Platform.BackendCapabilities.OpenVino)
                         : "ONNX Runtime engine not installed: add \"GPU engines\" in Components. Normal playback remains available.")
                     : AnimeJaNaiConf.VulkanSelected
-                    ? (VulkanSelectable ? "Linux Vulkan: spatial SPAN AnimeJaNai and RIFE 4.6. SDR sources, even dimensions; CPU/GPU transfers."
+                    ? (VulkanSelectable ? AnimeJaNai.Platform.BackendCapabilities.NcnnVulkan
                         : "Vulkan library missing. Normal playback remains available.")
-                    : (trtUsable ? "Linux TensorRT: NVIDIA only. Use ONNX RIFE models, not Vulkan RIFE 4.6."
+                    : (trtUsable ? AnimeJaNai.Platform.BackendCapabilities.TensorRt
                         : "TensorRT unavailable. Select Vulkan for AMD or NVIDIA when the Vulkan package is installed.");
                 RifeMissing = AnimeJaNaiConf.VulkanSelected ? !VulkanRifeOnDisk() : !RifeOnDisk();
                 RefreshBackendModelLists();
