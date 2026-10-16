@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:AnimeJaNaiConfEditor.ViewModels" x:Class="AnimeJaNaiConfEditor.Views.OptionalEngines" x:DataType="vm:MainWindowViewModel">
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="24" Spacing="12" MaxWidth="900" HorizontalAlignment="Left">
+      <TextBlock Text="Optional engines" FontSize="22" FontWeight="SemiBold" />
+      <TextBlock Text="You can keep your current engines and return here later. NVIDIA SDKs are optional downloads from NVIDIA; the Manager imports their runtime files from the archive you choose." TextWrapping="Wrap" />
+      <Border BorderBrush="Gray" BorderThickness="1" CornerRadius="4" Padding="16">
+        <StackPanel Spacing="10">
+          <TextBlock Text="NVIDIA FRUC — Optical Flow SDK" FontSize="18" FontWeight="SemiBold" />
+          <TextBlock Text="Fast SDR8 interpolation ×2, usable after RIFE. Contour and mouth artifacts are possible. Requires the Linux NVIDIA reader." TextWrapping="Wrap" />
+          <TextBlock Name="FrucSdkStatus" Text="{Binding OptionalSdks.FrucStatus}" TextWrapping="Wrap" />
+          <WrapPanel>
+            <Button Content="1. Download from NVIDIA" Command="{Binding OptionalSdks.OpenFrucDownload}" Margin="0,0,8,0" />
+            <Button Name="ImportFrucSdk" Content="2. Import SDK ZIP…" Click="ImportFrucSdkClick" IsEnabled="{Binding OptionalSdks.CanImport}" />
+          </WrapPanel>
+          <TextBlock Text="Download the complete Optical Flow SDK ZIP and accept NVIDIA’s terms on their website. Import the ZIP here; its FRUC library and compatible CUDA runtime are installed together. No CUDA Toolkit installation or manual file paths are needed." TextWrapping="Wrap" />
+          <ProgressBar IsIndeterminate="True" IsVisible="{Binding OptionalSdks.IsBusy}" />
+          <Button Content="Cancel import" Command="{Binding OptionalSdks.Cancel}" IsVisible="{Binding OptionalSdks.IsBusy}" HorizontalAlignment="Left" />
+          <TextBlock Text="{Binding OptionalSdks.Status}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+      <Border BorderBrush="Gray" BorderThickness="1" CornerRadius="4" Padding="16">
+        <StackPanel Spacing="10">
+          <TextBlock Text="NVIDIA TrueHDR" FontSize="18" FontWeight="SemiBold" />
+          <TextBlock Text="The Linux Maxine SDK needs both its Core and the TrueHDR feature. Its archive importer and HDR processing stage are separate integrations still in progress. This FRUC import does not enable TrueHDR. On Windows, the existing RTX Video path uses its own packaged runtime." TextWrapping="Wrap" />
+          <Button Content="NVIDIA TrueHDR installation guide" Command="{Binding OptionalSdks.OpenTrueHdrDownload}" HorizontalAlignment="Left" />
+        </StackPanel>
+      </Border>
+      <WrapPanel>
+        <Button Content="Continue to profiles" Command="{Binding ReturnToProfiles}" Margin="0,0,8,0" />
+        <Button Content="Refresh installed engines" Command="{Binding OptionalSdks.Refresh}" />
+      </WrapPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

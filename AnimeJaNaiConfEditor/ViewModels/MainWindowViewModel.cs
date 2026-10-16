@@ -36,6 +36,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             AnimeJaNaiConf = ReadAnimeJaNaiConf(AnimeJaNaiConfPath, true);
             HdrSettings = new HdrSettings(HdrConfPath,
                 _expectedBank.Contains("nvidia") ? "nvidia" : _expectedBank.Contains("amd") ? "amd" : null);
+            OptionalSdks = new OptionalSdkViewModel(DataDir, RefreshOptionalSdkStages);
             Engines = new EngineStore(DataDir);
             Engines.Refresh();
             // Built after the user conf loads so the read-only default profiles reflect the saved
@@ -58,6 +59,16 @@ namespace AnimeJaNaiConfEditor.ViewModels
             ComponentManager.Refreshed += RefreshComponentAwareness;
             // macOS has no downloadable components: everything is in the application.
             if (!OnMac) _ = InitializeComponentManagerAsync();
+        }
+
+        public OptionalSdkViewModel OptionalSdks { get; }
+        public void ShowOptionalEngines() => SelectedTabIndex = 3;
+        public void ReturnToProfiles() => SelectedTabIndex = 0;
+        private void RefreshOptionalSdkStages()
+        {
+            foreach (var slot in AnimeJaNaiConf.UpscaleSlots)
+                foreach (var chain in slot.Chains) chain.RefreshPipeline();
+            WriteAnimeJaNaiConf();
         }
 
         // ---- component awareness for the Profiles tab -------------------------------------

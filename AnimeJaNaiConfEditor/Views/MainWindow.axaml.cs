@@ -36,9 +36,10 @@ namespace AnimeJaNaiConfEditor.Views
 
         private void MainWindow_Opened(object? sender, EventArgs e)
         {
-            if (DataContext is MainWindowViewModel vm)
+            if (DataContext is MainWindowViewModel vm && vm.NotMacFeatures && vm.OptionalSdks.NeedsOnboarding)
             {
-
+                vm.ShowOptionalEngines();
+                vm.OptionalSdks.AcknowledgeOnboarding();
             }
         }
 

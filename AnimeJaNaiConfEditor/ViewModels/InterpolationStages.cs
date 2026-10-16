@@ -138,7 +138,11 @@ public partial class UpscaleChain
         ChangedPipeline();
     }
     public void UseLegacyEditor() => OrderedPipeline=false;
+    public void AddInterpolationStage() => AddRifeStage();
     public void AddRifeStage() => AddStage("rife","interpolate","tensorrt","quality","426",2);
+    public bool CanAddFruc => Vm?.OptionalSdks?.FrucReady == true;
+    public string FrucSetupHint => Vm?.OptionalSdks?.FrucStatus ?? "Install the Optical Flow SDK from Optional engines.";
+    public void ShowOptionalEngines() => Vm?.ShowOptionalEngines();
     public void AddFrucStage() => AddStage("nvidia-fruc","interpolate","cuda","fast","",2);
     public void AddUpscaleStage() => AddStage("onnx","upscale","tensorrt","quality",Vm?.GetAllModels().FirstOrDefault()??"",1);
     private void AddStage(string method,string kind,string runtime,string policy,string model,int factor)
@@ -163,7 +167,7 @@ public partial class UpscaleChain
     }
     public void RefreshPipeline()
     {
-        foreach(string name in new[]{nameof(OrderedPipeline),nameof(LegacyEditorVisible),nameof(PipelineEditable),nameof(PipelineReadError),nameof(Stages),nameof(PipelineCadence),nameof(PipelineOrder),nameof(PipelineNotice),nameof(CanUseLegacyEditor)}) this.RaisePropertyChanged(name);
+        foreach(string name in new[]{nameof(OrderedPipeline),nameof(LegacyEditorVisible),nameof(PipelineEditable),nameof(PipelineReadError),nameof(Stages),nameof(PipelineCadence),nameof(PipelineOrder),nameof(PipelineNotice),nameof(CanUseLegacyEditor),nameof(CanAddFruc),nameof(FrucSetupHint)}) this.RaisePropertyChanged(name);
         foreach(var stage in Stages)stage.Refresh();
     }
     internal bool TryPlan(out InterpolationPipeline.Plan plan,out string error)
@@ -231,13 +235,15 @@ public sealed class InterpolationStage : ReactiveObject
     private string _kind,_method,_runtime,_model,_policy,_numerator,_denominator;
     private bool _enabled;
     private readonly Dictionary<string,string> _options;
+    private readonly StageTechnology[] _technologies;
     public InterpolationStage(UpscaleChain chain,InterpolationPipeline.Stage s)
     {
         _chain=chain;Id=s.Id;_kind=s.Kind;_method=s.Method;_runtime=s.Runtime;_model=s.Model;_policy=s.Policy;_enabled=s.Enabled;
         _numerator=s.Factor.Numerator.ToString(CultureInfo.InvariantCulture);_denominator=s.Factor.Denominator.ToString(CultureInfo.InvariantCulture);_options=new(s.Options);
+        _technologies=MethodChoices.Select(name=>new StageTechnology(name,true,"")).ToArray();
     }
     [DataMember] public string Id { get; private set; }
-    [DataMember] public string Kind { get=>_kind;set=>Set(ref _kind,value); }
+    [DataMember] public string Kind { get=>_kind;private set=>Set(ref _kind,value); }
     [DataMember] public string Method { get=>_method;set=>Set(ref _method,value); }
     [DataMember] public string Runtime { get=>_runtime;set=>Set(ref _runtime,value); }
     [DataMember] public string Model { get=>_model;set=>Set(ref _model,value); }
@@ -245,14 +251,20 @@ public sealed class InterpolationStage : ReactiveObject
     [DataMember] public string Numerator { get=>_numerator;set=>Set(ref _numerator,value); }
     [DataMember] public string Denominator { get=>_denominator;set=>Set(ref _denominator,value); }
     [DataMember] public bool Enabled { get=>_enabled;set { if(_enabled==value)return;this.RaiseAndSetIfChanged(ref _enabled,value);Changed(); } }
-    public string[] MethodChoices => ["RIFE","NVIDIA FRUC","ONNX upscale"];
+    public string Category => Kind switch {"interpolate"=>"Interpolation","upscale"=>"Upscale","resize"=>"Downscale","hdr"=>"HDR",_=>Kind};
+    public string[] MethodChoices => Kind switch {"interpolate"=>["RIFE","NVIDIA FRUC"],"upscale"=>["ONNX upscale"],_=>[MethodChoice]};
+    public StageTechnology[] TechnologyChoices => _technologies;
+    public StageTechnology SelectedTechnology {
+        get=>TechnologyChoices.FirstOrDefault(t=>t.Name==MethodChoice)??new(MethodChoice,false,"Provider unavailable.");
+        set {if(value!=null&&value.Available&&MethodChoices.Contains(value.Name))MethodChoice=value.Name;}
+    }
     public string[] PolicyChoices => ["quality","fast"];
     public string MethodChoice
     {
         get=>Method switch {"rife"=>"RIFE","nvidia-fruc"=>"NVIDIA FRUC","onnx"=>"ONNX upscale",_=>Method};
         set
         {
-            if(value==MethodChoice || !MethodChoices.Contains(value))return;
+            if(value==MethodChoice || !MethodChoices.Contains(value)||!TechnologyEditable)return;
             _loading=true;
             try
             {
@@ -273,32 +285,41 @@ public sealed class InterpolationStage : ReactiveObject
     public bool IsRife => Method=="rife";
     public bool IsFruc => Method=="nvidia-fruc";
     public bool IsUpscale => Kind=="upscale";
+    public bool HasAttachedResize => ResizeHeight!="0"||ResizeFactor!="100";
     public bool IsInterpolation => Kind=="interpolate";
     public string ModeNotice => Method switch {
-        "rife" when Policy=="quality" => "Full RIFE prediction at every requested phase. Quality keeps the reference algorithm.",
-        "rife" when Policy=="fast" => "RIFE Fast uses shortcuts that can alter motion and contours. This choice affects this RIFE stage only.",
-        "nvidia-fruc" => "NVIDIA FRUC has one implemented mode: SDR 8-bit synthesis ×2. Known contour/mouth artifacts; no Quality/Fast switch.",
-        "onnx" => "Spatial upscaling uses the selected model. It has no temporal Quality/Fast mode.",
-        _ => "Imported method: its settings are preserved."
+        "rife" when Policy=="quality" => "Full RIFE prediction (reference).",
+        "rife" when Policy=="fast" => "Motion shortcuts can alter contours.",
+        "nvidia-fruc" => "SDR8 ×2. Artifacts on contours and mouths are possible.",
+        _ => ""
     };
+
     public string OrderDescription => IsUpscale
         ? ((ResizeHeight!="0" ? $"Resize to {ResizeHeight}p → " : ResizeFactor!="100" ? $"Resize to {ResizeFactor}% → " : "")+"ONNX upscale")
         : IsInterpolation ? $"{MethodChoice} ×{Numerator}"+(Denominator!="1"?$"/{Denominator}":"") : MethodChoice;
     public bool CanMoveUp => _chain.Stages.IndexOf(this)>0;
     public bool CanMoveDown => _chain.Stages.IndexOf(this)<_chain.Stages.Count-1;
-    public string Header => $"{_chain.Stages.IndexOf(this)+1}. {MethodChoice} / {Runtime}";
+    public string Header => $"{_chain.Stages.IndexOf(this)+1}. {Category}";
     public static string InferenceDirectory => Environment.GetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR")??Path.Combine(MainWindowViewModel.DataDir,"inference");
     private string Get(string key,string fallback="")=>_options.TryGetValue(key,out var v)?v:fallback;
     private void Option(string key,string value){if(Get(key)==value)return;_options[key]=value;Changed();}
     public bool Ensemble {get=>Get("ensemble","no")=="yes";set=>Option("ensemble",value?"yes":"no");}
     public string SceneThreshold {get=>Get("scene_detect_threshold","0.150");set=>Option("scene_detect_threshold",value);}
-    public string SdkLibrary {get=>Get("sdk_library");set=>Option("sdk_library",value);}
-    public string SdkRuntime {get=>Get("sdk_runtime");set=>Option("sdk_runtime",value);}
+    public string SdkLibrary {get=>ResolveSdkPath("sdk_library",_chain.Vm?.OptionalSdks?.InstalledFruc?.Library);set=>Option("sdk_library",value);}
+    public string SdkRuntime {get=>ResolveSdkPath("sdk_runtime",_chain.Vm?.OptionalSdks?.InstalledFruc?.Runtime);set=>Option("sdk_runtime",value);}
+    private string ResolveSdkPath(string key,string? installed) {
+        string saved=Get(key);return saved.Length==0||_chain.Vm?.OptionalSdks?.IsManagedPath(saved)==true?installed??"":saved;
+    }
+    public bool CanUseInstalledSdk => IsFruc&&_chain.Vm?.OptionalSdks?.InstalledFruc!=null&&new[]{"sdk_library","sdk_runtime"}.Any(k=>Get(k).Length>0&&_chain.Vm.OptionalSdks.IsManagedPath(Get(k))!=true);
+    public void UseInstalledSdk() {
+        if(!CanUseInstalledSdk)return;_options.Remove("sdk_library");_options.Remove("sdk_runtime");Changed();
+    }
     public string KernelFatbin {get=>Get("kernel_fatbin");set=>Option("kernel_fatbin",value);}
     public string ResizeHeight {get=>Get("resize_height_before_upscale","0");set=>Option("resize_height_before_upscale",value);}
     public string ResizeFactor {get=>Get("resize_factor_before_upscale","100");set=>Option("resize_factor_before_upscale",value);}
     public string Frames {get=>Get("frames","0");set=>Option("frames",value);}
     public string TemporalThreshold {get=>Get("temporal_scene_threshold","0.150");set=>Option("temporal_scene_threshold",value);}
+    public bool TechnologyEditable => _options.Keys.All(k=>(IsRife?new[]{"ensemble","scene_detect_threshold"}:IsFruc?new[]{"sdk_library","sdk_runtime","kernel_fatbin"}:IsUpscale?new[]{"resize_factor_before_upscale","resize_height_before_upscale","frames","temporal_scene_threshold"}:Array.Empty<string>()).Contains(k));
     public string OptionsText => string.Join("; ",_options.OrderBy(k=>k.Key).Select(k=>$"{k.Key}={k.Value}"));
     public string Availability
     {
@@ -325,7 +346,7 @@ public sealed class InterpolationStage : ReactiveObject
             if(Method=="nvidia-fruc"&&Runtime=="cuda")
             {
                 if(Policy!="fast"||stage.Factor.Numerator!=2||stage.Factor.Denominator!=1)return "FRUC requires explicit Fast ×2; synthesis precision is SDR8bit.";
-                foreach(var path in new[]{SdkLibrary,SdkRuntime,KernelFatbin})if(!Path.IsPathFullyQualified(path)||!File.Exists(path))return "FRUC needs absolute existing SDK library, compatible CUDART11 and kernel_fatbin paths.";
+                foreach(var path in new[]{SdkLibrary,SdkRuntime,KernelFatbin})if(!Path.IsPathFullyQualified(path)||!File.Exists(path))return "FRUC SDK is missing. Import the Optical Flow SDK ZIP from Optional engines.";
                 if(!File.Exists(Path.Combine(InferenceDirectory,"libaji_fruc.so")))return "Missing provider libaji_fruc.so.";
             }
             else if(Method=="rife"&&Runtime=="tensorrt")
@@ -349,6 +370,7 @@ public sealed class InterpolationStage : ReactiveObject
     {
         var m=Regex.Match(Path.GetFileName(file),@"rife_v(\d+)\.(\d+)(_lite)?(_ensemble)?\.onnx$");return m.Success?m.Groups[1].Value+m.Groups[2].Value+(m.Groups[3].Success?"1":""):"";
     }
+    public string AvailabilityLabel => Availability.StartsWith("Files present",StringComparison.Ordinal)?"Ready":Availability;
     // Disabling an imported stage must remain possible even on another machine.
     public bool CanEnable => Enabled||Availability.StartsWith("Files present",StringComparison.Ordinal);
     public void MoveUp()=>_chain.MoveStage(this,-1);
@@ -358,11 +380,25 @@ public sealed class InterpolationStage : ReactiveObject
     private void Changed(){if(!_loading)_chain.ChangedPipeline();}
     internal void Refresh()
     {
-        foreach(var name in new[]{nameof(Header),nameof(MethodChoice),nameof(ModelChoices),nameof(IsRife),nameof(IsFruc),nameof(IsUpscale),nameof(IsInterpolation),nameof(ModeNotice),nameof(OrderDescription),nameof(CanMoveUp),nameof(CanMoveDown),nameof(Availability),nameof(CanEnable),nameof(Ensemble),nameof(SceneThreshold),nameof(SdkLibrary),nameof(SdkRuntime),nameof(KernelFatbin),nameof(ResizeHeight),nameof(ResizeFactor),nameof(Frames),nameof(TemporalThreshold),nameof(OptionsText)})this.RaisePropertyChanged(name);
+        foreach(var technology in _technologies)technology.Update(technology.Name!="NVIDIA FRUC"||MainWindowViewModel.OnLinux&&(_chain.Vm?.OptionalSdks?.FrucReady==true||IsFruc&&Availability.StartsWith("Files present",StringComparison.Ordinal)),technology.Name=="NVIDIA FRUC"?_chain.FrucSetupHint:"");
+        foreach(var name in new[]{nameof(Header),nameof(Category),nameof(MethodChoice),nameof(TechnologyChoices),nameof(SelectedTechnology),nameof(ModelChoices),nameof(IsRife),nameof(IsFruc),nameof(IsUpscale),nameof(HasAttachedResize),nameof(IsInterpolation),nameof(ModeNotice),nameof(OrderDescription),nameof(CanMoveUp),nameof(CanMoveDown),nameof(Availability),nameof(AvailabilityLabel),nameof(CanEnable),nameof(Ensemble),nameof(SceneThreshold),nameof(SdkLibrary),nameof(SdkRuntime),nameof(CanUseInstalledSdk),nameof(KernelFatbin),nameof(ResizeHeight),nameof(ResizeFactor),nameof(Frames),nameof(TemporalThreshold),nameof(OptionsText),nameof(TechnologyEditable)})this.RaisePropertyChanged(name);
     }
     internal InterpolationPipeline.Stage ToStage()
     {
         if(!long.TryParse(Numerator,NumberStyles.None,CultureInfo.InvariantCulture,out long n)||!long.TryParse(Denominator,NumberStyles.None,CultureInfo.InvariantCulture,out long d))throw new InvalidDataException("Stage factors require positive integers.");
-        return new(Id,Kind,Method,Runtime,Enabled,Model,new(n,d),Policy,new Dictionary<string,string>(_options));
+        var options=new Dictionary<string,string>(_options);
+        if(IsFruc) {options["sdk_library"]=SdkLibrary;options["sdk_runtime"]=SdkRuntime;options["kernel_fatbin"]=KernelFatbin;}
+        return new(Id,Kind,Method,Runtime,Enabled,Model,new(n,d),Policy,options);
     }
+}
+
+public sealed class StageTechnology : ReactiveObject
+{
+    public string Name { get; }
+    private bool available;
+    private string reason;
+    public bool Available {get=>available;private set=>this.RaiseAndSetIfChanged(ref available,value);}
+    public string Reason {get=>reason;private set=>this.RaiseAndSetIfChanged(ref reason,value);}
+    public StageTechnology(string name,bool enabled,string why){Name=name;available=enabled;reason=why;}
+    public void Update(bool enabled,string why){Available=enabled;Reason=why;}
 }

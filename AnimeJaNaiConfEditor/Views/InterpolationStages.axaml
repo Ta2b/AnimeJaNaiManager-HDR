@@ -19,6 +19,13 @@
     <StackPanel IsVisible="{Binding OrderedPipeline}" Spacing="8">
       <TextBlock Name="OrderedCadence" Text="{Binding PipelineCadence}" FontWeight="SemiBold" />
       <TextBlock Name="OrderedProcessingOrder" Text="{Binding PipelineOrder}" TextWrapping="Wrap" />
+      <WrapPanel IsEnabled="{Binding PipelineEditable}">
+        <Button Content="Add interpolation" Command="{Binding AddInterpolationStage}" Margin="0,0,8,0" />
+        <Button Content="Add upscale" Command="{Binding AddUpscaleStage}" Margin="0,0,8,0" />
+        <Button Content="Add downscale" IsEnabled="False" ToolTip.Tip="A compatible downscale reader is required." Margin="0,0,8,0" />
+        <Button Content="Add HDR" IsEnabled="False" ToolTip.Tip="A compatible HDR stage is required." />
+      </WrapPanel>
+      <Button Content="Install optional engines…" Command="{Binding ShowOptionalEngines}" HorizontalAlignment="Left" />
       <ItemsControl Name="OrderedStages" ItemsSource="{Binding Stages}" IsEnabled="{Binding PipelineEditable}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:InterpolationStage">
@@ -34,7 +41,16 @@
                 </DockPanel>
                 <WrapPanel>
                   <CheckBox Margin="0,0,12,0" Content="Active" IsChecked="{Binding Enabled}" IsEnabled="{Binding CanEnable}" />
-                  <ComboBox Width="160" ItemsSource="{Binding MethodChoices}" SelectedValue="{Binding MethodChoice}" />
+                  <TextBlock Text="Technology" Margin="0,0,6,0" VerticalAlignment="Center" />
+                  <ComboBox Name="StageTechnology" MinWidth="180" ItemsSource="{Binding TechnologyChoices}" SelectedItem="{Binding SelectedTechnology, Mode=TwoWay}" IsEnabled="{Binding TechnologyEditable}">
+                    <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:StageTechnology"><TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Reason}" /></DataTemplate></ComboBox.ItemTemplate>
+                    <ComboBox.ItemContainerTheme>
+                      <ControlTheme TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+                        <Setter Property="IsEnabled" Value="{ReflectionBinding Available}" />
+                      </ControlTheme>
+                    </ComboBox.ItemContainerTheme>
+                  </ComboBox>
+
                   <StackPanel Name="RifeModeControls" Orientation="Horizontal" IsVisible="{Binding IsRife}">
                     <TextBlock Margin="10,0,5,0" Text="RIFE mode" VerticalAlignment="Center" />
                     <ComboBox Name="RifeMode" Width="100" ItemsSource="{Binding PolicyChoices}" SelectedValue="{Binding Policy}" />
@@ -51,35 +67,28 @@
                   <TextBlock Text="/" VerticalAlignment="Center" />
                   <TextBox Name="StageDenominator" Width="65" Text="{Binding Denominator}" />
                 </StackPanel>
-                <WrapPanel IsVisible="{Binding IsRife}">
+                <Expander Header="Advanced RIFE settings" IsVisible="{Binding IsRife}"><WrapPanel>
                   <CheckBox Content="Ensemble" IsChecked="{Binding Ensemble}" Margin="0,0,15,0" />
                   <TextBlock Text="Scene threshold" VerticalAlignment="Center" Margin="0,0,5,0" />
                   <TextBox Width="90" Text="{Binding SceneThreshold}" />
-                </WrapPanel>
-                <StackPanel Spacing="5" IsVisible="{Binding IsFruc}">
-                  <TextBlock Text="Fast SDR8bit synthesis. Install the NVIDIA SDK separately; use its compatible CUDART11. Absolute file paths required." TextWrapping="Wrap" />
-                  <Grid ColumnDefinitions="150,*"><TextBlock Text="SDK libNvOFFRUC.so" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding SdkLibrary}" /></Grid>
-                  <Grid ColumnDefinitions="150,*"><TextBlock Text="SDK CUDA runtime" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding SdkRuntime}" /></Grid>
-                  <Grid ColumnDefinitions="150,*"><TextBlock Text="aji_fruc.fatbin" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding KernelFatbin}" /></Grid>
-                </StackPanel>
+                </WrapPanel></Expander>
+                <Button Content="Use installed SDK" Command="{Binding UseInstalledSdk}" IsVisible="{Binding CanUseInstalledSdk}" HorizontalAlignment="Left" />
+                <TextBlock IsVisible="{Binding IsFruc}" Text="SDK paths are managed automatically. Existing custom profile paths are preserved in Stage details." TextWrapping="Wrap" />
                 <StackPanel Spacing="5" IsVisible="{Binding IsUpscale}">
+                  <Expander Header="Imported pre-upscale resize" IsVisible="{Binding HasAttachedResize}"><StackPanel Spacing="5">
                   <Grid ColumnDefinitions="150,*"><TextBlock Text="Pre-upscale height" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding ResizeHeight}" /></Grid>
                   <Grid ColumnDefinitions="150,*"><TextBlock Text="Pre-upscale size (%)" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding ResizeFactor}" /></Grid>
                   <TextBlock Text="This resize runs immediately before this upscaler (height 0 and size 100% disable it). An interpolation stage above this upscaler runs before its resize." TextWrapping="Wrap" />
-                  <TextBlock Text="Spatial ONNX models in a mixed chain; temporal models retain their legacy route." TextWrapping="Wrap" />
+                  </StackPanel></Expander>
                 </StackPanel>
-                <TextBlock Text="{Binding Availability}" TextWrapping="Wrap" Foreground="Orange" />
+                <TextBlock Text="{Binding AvailabilityLabel}" ToolTip.Tip="{Binding Availability}" TextWrapping="Wrap" />
                 <Expander Header="Stage details"><StackPanel><TextBlock Text="{Binding Id, StringFormat='Stable ID: {0}'}" /><TextBlock Text="{Binding OptionsText}" TextWrapping="Wrap" /></StackPanel></Expander>
               </StackPanel>
             </Border>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
-      <WrapPanel IsEnabled="{Binding PipelineEditable}">
-        <Button Content="Add RIFE" Command="{Binding AddRifeStage}" Margin="0,0,8,0" />
-        <Button Content="Add NVIDIA FRUC" Command="{Binding AddFrucStage}" Margin="0,0,8,0" />
-        <Button Content="Add ONNX upscale" Command="{Binding AddUpscaleStage}" />
-      </WrapPanel>
+
       <TextBlock Text="New stages start inactive. Complete their files/settings before activation. Moving an active stage changes processing order; factors multiply." TextWrapping="Wrap" />
       <Expander Header="Other interpolation methods"><TextBlock Text="{Binding OtherInterpolationMethods}" TextWrapping="Wrap" /></Expander>
     </StackPanel>

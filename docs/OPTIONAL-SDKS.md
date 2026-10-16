@@ -1,0 +1,9 @@
+# Optional FRUC SDK and category editor — AH-316 / AH-319
+
+At first launch, Optional engines offers NVIDIA’s download link and an SDK ZIP picker. The same tab stays accessible later. Linux x64 imports the FRUC sample library, its matching CUDART11 and license files; no CUDA Toolkit installation or manual paths are needed. Nothing is downloaded automatically or redistributed.
+
+The immutable versions and current registry live under the writable data directory, optional-sdks/fruc. CRC/SHA, expanded sizes, ELF architecture and managed-directory links are checked. Activation is atomic. Reinstallation preserves altered old folders and redirects managed paths; custom profile paths are retained until Use installed SDK is chosen. A newer registry is preserved without overwrite.
+
+The editor has four fixed category additions: Interpolation, Upscale, Downscale, HDR. Technologies are selected within their category. Interpolation offers RIFE and FRUC; Upscale currently offers ONNX. FRUC is disabled when its SDK/provider is absent or on platforms whose reader is not delivered. Downscale/HDR additions remain disabled until their separate providers are delivered (AH-315/317). Alternative downscale filters are AH-321, TrueHDR archive provisioning is AH-318, FRUC quality diagnosis is AH-320.
+
+Qualification: real Optical Flow SDK5.0.7 import and16 targeted UI/configuration/rollback checks; additional category selection, disabled popup item, category isolation and save/reload checks, future-registry and symlink guards. An initial selection rebound was fixed by retaining stable choice objects; only the failed and remaining cases were resumed. Imported SDK library/runtime are byte-exact; a fresh process successfully created/queried/destroyed the real CUDA FRUC provider from these managed paths. No pixel benchmark was repeated, because video arithmetic and the provider are unchanged. Assistant and compact editor renders inspected.

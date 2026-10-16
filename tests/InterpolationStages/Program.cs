@@ -49,7 +49,7 @@ void Click(string text,object? context=null)
  if(!b.IsEnabled||b.Command==null)throw new Exception("Button disabled or unbound: "+text);
  b.Command.Execute(b.CommandParameter);Dispatcher.UIThread.RunJobs();
 }
-Click("Add NVIDIA FRUC");var fruc=chain.Stages.Last();
+chain.AddFrucStage();Dispatcher.UIThread.RunJobs();var fruc=chain.Stages.Last();
 Check("new FRUC starts inactive with explicit Fast policy and missing SDK diagnosis",!fruc.Enabled&&fruc.Policy=="fast"&&!fruc.CanEnable&&fruc.Availability.Contains("SDK"));
 string sdk=Path.Combine(output,"sdk-fixture.so"),runtime=Path.Combine(output,"runtime-fixture.so");File.WriteAllText(sdk,"UI fixture");File.WriteAllText(runtime,"UI fixture");
 fruc.SdkLibrary=sdk;fruc.SdkRuntime=runtime;Dispatcher.UIThread.RunJobs();
@@ -75,7 +75,7 @@ vm.AnimeJaNaiConf=vm.ReadAnimeJaNaiConf(mixed,true);chain=vm.AnimeJaNaiConf.Upsc
 chain.Stages[1].Enabled=false;string disabled=Path.Combine(output,"disabled.conf");vm.WriteAnimeJaNaiConf(disabled);
 Check("disabled stage preserved on reload",!vm.ReadAnimeJaNaiConf(disabled).UpscaleSlots[0].Chains[0].Stages[1].Enabled);
 chain.Stages[1].Enabled=true;
-Click("Add RIFE");var extra=chain.Stages.Last();Click("Remove stage",extra);
+Click("Add interpolation");var extra=chain.Stages.Last();Click("Remove stage",extra);
 Check("UI remove writes a complete consistent stage list",chain.Stages.Count==3&&File.ReadAllText(path).Contains("chain_1_stage_count=3"));
 Check("source comments and unrelated global keys preserved",File.ReadAllText(path).Contains("# user comment")&&File.ReadAllText(path).Contains("custom_global=keep"));
 using(var frame=window.CaptureRenderedFrame()){if(frame==null)throw new Exception("No rendered frame");frame.Save(Path.Combine(output,"stages.png"));}

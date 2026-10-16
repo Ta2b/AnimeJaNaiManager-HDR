@@ -35,7 +35,7 @@ Check("summary places attached720p resize AFTER RIFE",chain.PipelineOrder=="Sour
 chain.AddFrucStage();var fruc=chain.Stages.Last();fruc.SdkLibrary=Path.Combine(output,"sdk.so");fruc.SdkRuntime=Path.Combine(output,"runtime.so");File.WriteAllText(fruc.SdkLibrary,"UI fixture only");File.WriteAllText(fruc.SdkRuntime,"UI fixture only");fruc.Enabled=true;fruc.MoveUp();Dispatcher.UIThread.RunJobs();
 var modes=view.GetVisualDescendants().OfType<StackPanel>().Where(c=>c.Name=="RifeModeControls").ToArray();
 Check("only RIFE offers a mode selector; FRUC and SR do not",modes.Length==3&&modes.Count(c=>c.IsVisible)==1&&ReferenceEquals(modes.Single(c=>c.IsVisible).DataContext,rife));
-Check("FRUC declares its single implemented SDR8 synthesis mode",fruc.ModeNotice.Contains("one implemented mode")&&fruc.ModeNotice.Contains("8-bit")&&fruc.Policy=="fast");
+Check("FRUC declares its single implemented SDR8 synthesis mode",fruc.ModeNotice.Contains("SDR8")&&fruc.ModeNotice.Contains("Artifacts")&&fruc.Policy=="fast");
 var choice=view.GetVisualDescendants().OfType<ComboBox>().Single(c=>c.Name=="RifeMode"&&ReferenceEquals(c.DataContext,rife));choice.SelectedValue="fast";Dispatcher.UIThread.RunJobs();
 Check("RIFE mode binding changes its stage and leaves historical defaults intact",rife.Policy=="fast"&&vm.AnimeJaNaiConf.RifeEngine=="quality"&&rife.ModeNotice.Contains("shortcuts"));
 sr.MoveUp();sr.MoveUp();Dispatcher.UIThread.RunJobs();

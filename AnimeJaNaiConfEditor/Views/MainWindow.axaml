@@ -958,5 +958,8 @@
       </StackPanel>
     </ScrollViewer>
   </TabItem>
+  <TabItem Header="Optional engines" IsVisible="{Binding NotMacFeatures}">
+    <views:OptionalEngines DataContext="{Binding}" />
+  </TabItem>
   </TabControl>
 </Window>
