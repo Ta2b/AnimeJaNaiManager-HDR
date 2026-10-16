@@ -2,11 +2,23 @@
              xmlns:vm="using:AnimeJaNaiConfEditor.ViewModels" xmlns:ui="clr-namespace:FluentAvalonia.UI.Controls;assembly=FluentAvalonia"
              x:Class="AnimeJaNaiConfEditor.Views.InterpolationStages" x:DataType="vm:UpscaleChain">
   <StackPanel Margin="10,10,10,10" Spacing="8">
-    <CheckBox Name="OrderedStagesToggle" Content="Ordered interpolation and upscaling stages" IsChecked="{Binding OrderedPipeline}" IsEnabled="{Binding CanUseLegacyEditor}"
+    <CheckBox Name="OrderedStagesToggle" Content="Ordered processing chain" IsChecked="{Binding OrderedPipeline}" IsEnabled="{Binding CanUseLegacyEditor}"
               ToolTip.Tip="Legacy settings can be converted losslessly. A mixed layout must first be reduced to a single RIFE before/after the upscalers to return to the legacy editor." />
     <TextBlock Text="{Binding PipelineNotice}" TextWrapping="Wrap" />
+    <StackPanel Name="LegacyRifeControls" IsVisible="{Binding LegacyEditorVisible}" IsEnabled="{Binding EnableRife}" Spacing="6">
+      <WrapPanel>
+        <TextBlock Text="Legacy RIFE mode" VerticalAlignment="Center" Margin="0,0,10,0" />
+        <ToggleButton IsChecked="{Binding Vm.AnimeJaNaiConf.RifeEngineQuality}" Content="Full RIFE (Quality)" />
+        <ToggleButton IsChecked="{Binding Vm.AnimeJaNaiConf.RifeEngineFast}" Content="RIFE Fast (shortcuts)" />
+      </WrapPanel>
+      <TextBlock Text="Historical profiles share this RIFE mode. In ordered chains, choose the mode inside each RIFE stage." TextWrapping="Wrap" />
+      <TextBlock Text="{Binding Vm.TemporalQualityNotice}" TextWrapping="Wrap" />
+      <CheckBox IsChecked="{Binding Vm.AnimeJaNaiConf.RifeDrawings}" IsEnabled="{Binding Vm.AnimeJaNaiConf.RifeEngineFast}" Content="Spread the motion over held drawings" />
+      <TextBlock Text="{Binding Vm.RetimingNotice}" TextWrapping="Wrap" />
+    </StackPanel>
     <StackPanel IsVisible="{Binding OrderedPipeline}" Spacing="8">
       <TextBlock Name="OrderedCadence" Text="{Binding PipelineCadence}" FontWeight="SemiBold" />
+      <TextBlock Name="OrderedProcessingOrder" Text="{Binding PipelineOrder}" TextWrapping="Wrap" />
       <ItemsControl Name="OrderedStages" ItemsSource="{Binding Stages}" IsEnabled="{Binding PipelineEditable}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:InterpolationStage">
@@ -23,14 +35,17 @@
                 <WrapPanel>
                   <CheckBox Margin="0,0,12,0" Content="Active" IsChecked="{Binding Enabled}" IsEnabled="{Binding CanEnable}" />
                   <ComboBox Width="160" ItemsSource="{Binding MethodChoices}" SelectedValue="{Binding MethodChoice}" />
-                  <TextBlock Margin="10,0,5,0" Text="Policy" VerticalAlignment="Center" />
-                  <ComboBox Width="100" ItemsSource="{Binding PolicyChoices}" SelectedValue="{Binding Policy}" />
+                  <StackPanel Name="RifeModeControls" Orientation="Horizontal" IsVisible="{Binding IsRife}">
+                    <TextBlock Margin="10,0,5,0" Text="RIFE mode" VerticalAlignment="Center" />
+                    <ComboBox Name="RifeMode" Width="100" ItemsSource="{Binding PolicyChoices}" SelectedValue="{Binding Policy}" />
+                  </StackPanel>
                 </WrapPanel>
+                <TextBlock Text="{Binding ModeNotice}" TextWrapping="Wrap" />
                 <Grid ColumnDefinitions="150,*" IsVisible="{Binding !IsFruc}">
                   <TextBlock Text="Model / variant" VerticalAlignment="Center" />
                   <ui:FAComboBox Grid.Column="1" IsEditable="True" Text="{Binding Model, Mode=TwoWay}" ItemsSource="{Binding ModelChoices}" />
                 </Grid>
-                <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsInterpolation}">
+                <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsRife}">
                   <TextBlock Width="144" Text="Frame-rate factor" VerticalAlignment="Center" />
                   <TextBox Name="StageNumerator" Width="65" Text="{Binding Numerator}" />
                   <TextBlock Text="/" VerticalAlignment="Center" />
@@ -48,8 +63,9 @@
                   <Grid ColumnDefinitions="150,*"><TextBlock Text="aji_fruc.fatbin" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding KernelFatbin}" /></Grid>
                 </StackPanel>
                 <StackPanel Spacing="5" IsVisible="{Binding IsUpscale}">
-                  <Grid ColumnDefinitions="150,*"><TextBlock Text="Resize height (0=off)" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding ResizeHeight}" /></Grid>
-                  <Grid ColumnDefinitions="150,*"><TextBlock Text="Resize factor (%)" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding ResizeFactor}" /></Grid>
+                  <Grid ColumnDefinitions="150,*"><TextBlock Text="Pre-upscale height" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding ResizeHeight}" /></Grid>
+                  <Grid ColumnDefinitions="150,*"><TextBlock Text="Pre-upscale size (%)" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding ResizeFactor}" /></Grid>
+                  <TextBlock Text="This resize runs immediately before this upscaler (height 0 and size 100% disable it). An interpolation stage above this upscaler runs before its resize." TextWrapping="Wrap" />
                   <TextBlock Text="Spatial ONNX models in a mixed chain; temporal models retain their legacy route." TextWrapping="Wrap" />
                 </StackPanel>
                 <TextBlock Text="{Binding Availability}" TextWrapping="Wrap" Foreground="Orange" />

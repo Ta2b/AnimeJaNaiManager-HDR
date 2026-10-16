@@ -62,6 +62,7 @@ public partial class UpscaleChain
     public bool LegacyEditorVisible => !OrderedPipeline;
     public bool CanUseLegacyEditor => PipelineEditable && (!OrderedPipeline || TryLegacyProjection(out _));
     public string OtherInterpolationMethods => "GMFSS, DRBA/DistilDRBA, GIMM, FILM, EISAI, SG-RIFE, FrameFusion and generative workflows are separate integrations. They become selectable here when their reader/preparation provider is delivered.";
+    public string PipelineOrder => "Source → " + string.Join(" → ", Stages.Where(s=>s.Enabled).Select(s=>s.OrderDescription)) + " → Display";
     public string PipelineCadence
     {
         get
@@ -162,7 +163,7 @@ public partial class UpscaleChain
     }
     public void RefreshPipeline()
     {
-        foreach(string name in new[]{nameof(OrderedPipeline),nameof(LegacyEditorVisible),nameof(PipelineEditable),nameof(PipelineReadError),nameof(Stages),nameof(PipelineCadence),nameof(PipelineNotice),nameof(CanUseLegacyEditor)}) this.RaisePropertyChanged(name);
+        foreach(string name in new[]{nameof(OrderedPipeline),nameof(LegacyEditorVisible),nameof(PipelineEditable),nameof(PipelineReadError),nameof(Stages),nameof(PipelineCadence),nameof(PipelineOrder),nameof(PipelineNotice),nameof(CanUseLegacyEditor)}) this.RaisePropertyChanged(name);
         foreach(var stage in Stages)stage.Refresh();
     }
     internal bool TryPlan(out InterpolationPipeline.Plan plan,out string error)
@@ -273,6 +274,16 @@ public sealed class InterpolationStage : ReactiveObject
     public bool IsFruc => Method=="nvidia-fruc";
     public bool IsUpscale => Kind=="upscale";
     public bool IsInterpolation => Kind=="interpolate";
+    public string ModeNotice => Method switch {
+        "rife" when Policy=="quality" => "Full RIFE prediction at every requested phase. Quality keeps the reference algorithm.",
+        "rife" when Policy=="fast" => "RIFE Fast uses shortcuts that can alter motion and contours. This choice affects this RIFE stage only.",
+        "nvidia-fruc" => "NVIDIA FRUC has one implemented mode: SDR 8-bit synthesis ×2. Known contour/mouth artifacts; no Quality/Fast switch.",
+        "onnx" => "Spatial upscaling uses the selected model. It has no temporal Quality/Fast mode.",
+        _ => "Imported method: its settings are preserved."
+    };
+    public string OrderDescription => IsUpscale
+        ? ((ResizeHeight!="0" ? $"Resize to {ResizeHeight}p → " : ResizeFactor!="100" ? $"Resize to {ResizeFactor}% → " : "")+"ONNX upscale")
+        : IsInterpolation ? $"{MethodChoice} ×{Numerator}"+(Denominator!="1"?$"/{Denominator}":"") : MethodChoice;
     public bool CanMoveUp => _chain.Stages.IndexOf(this)>0;
     public bool CanMoveDown => _chain.Stages.IndexOf(this)<_chain.Stages.Count-1;
     public string Header => $"{_chain.Stages.IndexOf(this)+1}. {MethodChoice} / {Runtime}";
@@ -347,7 +358,7 @@ public sealed class InterpolationStage : ReactiveObject
     private void Changed(){if(!_loading)_chain.ChangedPipeline();}
     internal void Refresh()
     {
-        foreach(var name in new[]{nameof(Header),nameof(MethodChoice),nameof(ModelChoices),nameof(IsRife),nameof(IsFruc),nameof(IsUpscale),nameof(IsInterpolation),nameof(CanMoveUp),nameof(CanMoveDown),nameof(Availability),nameof(CanEnable),nameof(Ensemble),nameof(SceneThreshold),nameof(SdkLibrary),nameof(SdkRuntime),nameof(KernelFatbin),nameof(ResizeHeight),nameof(ResizeFactor),nameof(Frames),nameof(TemporalThreshold),nameof(OptionsText)})this.RaisePropertyChanged(name);
+        foreach(var name in new[]{nameof(Header),nameof(MethodChoice),nameof(ModelChoices),nameof(IsRife),nameof(IsFruc),nameof(IsUpscale),nameof(IsInterpolation),nameof(ModeNotice),nameof(OrderDescription),nameof(CanMoveUp),nameof(CanMoveDown),nameof(Availability),nameof(CanEnable),nameof(Ensemble),nameof(SceneThreshold),nameof(SdkLibrary),nameof(SdkRuntime),nameof(KernelFatbin),nameof(ResizeHeight),nameof(ResizeFactor),nameof(Frames),nameof(TemporalThreshold),nameof(OptionsText)})this.RaisePropertyChanged(name);
     }
     internal InterpolationPipeline.Stage ToStage()
     {
