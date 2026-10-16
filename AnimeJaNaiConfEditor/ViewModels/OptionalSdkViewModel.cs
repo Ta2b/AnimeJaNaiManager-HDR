@@ -26,6 +26,10 @@ public sealed class OptionalSdkViewModel : ReactiveObject
         try{return Path.IsPathFullyQualified(path)&&Path.GetFullPath(path).StartsWith(managedRoot,StringComparison.Ordinal);}
         catch(ArgumentException){return false;}
     }
+    public string TrueHdrRoot => Environment.GetEnvironmentVariable("ANIMEJANAI_VFX_SDK") is {Length:>0} root?root:"/usr/local/VideoFX";
+    public static bool HasTrueHdrSdk(string root) => Path.IsPathFullyQualified(root)&&new[]{"lib/libVideoFX.so","lib/libNVCVImage.so","features/nvvfxtruehdr/lib/libnvVFXTrueHDR.so"}.All(n=>File.Exists(Path.Combine(root,n)));
+    public bool TrueHdrReady => MainWindowViewModel.OnLinux&&HasTrueHdrSdk(TrueHdrRoot)&&PipelineReaderFeatures.HasTrueHdr(InterpolationStage.InferenceDirectory);
+    public string TrueHdrStatus => !MainWindowViewModel.OnLinux?"Ordered TrueHDR playback currently requires the Linux NVIDIA reader.":!HasTrueHdrSdk(TrueHdrRoot)?"Install the Maxine VideoFX Core and TrueHDR feature from the NVIDIA guide.":!PipelineReaderFeatures.HasTrueHdr(InterpolationStage.InferenceDirectory)?"SDK installed. Update the player components to enable HDR stages.":"Installed — NVIDIA TrueHDR can be added once per profile. GPU, SDR BT.709 input and driver are checked at playback.";
     public bool NeedsOnboarding=>!File.Exists(onboarding);
     public bool IsBusy {get=>busy;private set {this.RaiseAndSetIfChanged(ref busy,value);this.RaisePropertyChanged(nameof(CanImport));}}
     public bool CanImport=>!IsBusy&&MainWindowViewModel.OnLinux;
@@ -39,7 +43,7 @@ public sealed class OptionalSdkViewModel : ReactiveObject
     void Refresh(bool notify) {
         try{installed=store.Read();Status=installed==null?"":"SDK files are installed locally. No manual paths are needed.";}
         catch(Exception e)when(e is IOException or InvalidDataException or JsonException or UnauthorizedAccessException){installed=null;Status=e.Message;}
-        this.RaisePropertyChanged(nameof(InstalledFruc));this.RaisePropertyChanged(nameof(FrucReady));this.RaisePropertyChanged(nameof(FrucStatus));if(notify)changed();
+        this.RaisePropertyChanged(nameof(InstalledFruc));this.RaisePropertyChanged(nameof(FrucReady));this.RaisePropertyChanged(nameof(FrucStatus));this.RaisePropertyChanged(nameof(TrueHdrReady));this.RaisePropertyChanged(nameof(TrueHdrStatus));if(notify)changed();
     }
     public async Task ImportAsync(string path) {
         if(!CanImport)return;IsBusy=true;cancel=new();Status="Checking and importing the SDK ZIP…";

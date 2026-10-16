@@ -164,6 +164,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
 
         // ---- display upscaling and HDR (portable_config/script-opts/animejanai_hdr_auto.conf) ----
         public HdrSettings HdrSettings { get; }
+        public bool LegacyHdrConversionVisible => CurrentSlot?.HdrStageControlled!=true&&CurrentSlot?.Chains.All(c=>c.ProfileHdrCount==0)!=false;
         public EngineStore Engines { get; }
 
         public string[] HdrTargetResolutions { get; } =
@@ -426,6 +427,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 ApplySharp(DefaultUpscaleSlots[2], AnimeJaNaiConf.PerformanceSharp);
             }
             this.RaisePropertyChanged(nameof(CurrentSlot));
+                this.RaisePropertyChanged(nameof(LegacyHdrConversionVisible));
             this.RaisePropertyChanged(nameof(CurrentDefaultStandardSelected));
             this.RaisePropertyChanged(nameof(CurrentDefaultSharpSelected));
         }
@@ -619,6 +621,7 @@ chain_2_rife=no";
             {
                 this.RaiseAndSetIfChanged(ref _showDefaultProfiles, value);
                 this.RaisePropertyChanged(nameof(CurrentSlot));
+                this.RaisePropertyChanged(nameof(LegacyHdrConversionVisible));
             }
         }
 
@@ -631,6 +634,7 @@ chain_2_rife=no";
             {
                 this.RaiseAndSetIfChanged(ref _showCustomProfiles, value);
                 this.RaisePropertyChanged(nameof(CurrentSlot));
+                this.RaisePropertyChanged(nameof(LegacyHdrConversionVisible));
             }
         }
 
@@ -643,6 +647,7 @@ chain_2_rife=no";
             {
                 this.RaiseAndSetIfChanged(ref _selectedSlotNumber, value);
                 this.RaisePropertyChanged(nameof(CurrentSlot));
+                this.RaisePropertyChanged(nameof(LegacyHdrConversionVisible));
                 this.RaisePropertyChanged(nameof(CurrentDefaultStandardSelected));
                 this.RaisePropertyChanged(nameof(CurrentDefaultSharpSelected));
             }
@@ -1190,6 +1195,7 @@ chain_2_rife=no";
                         Vm = this,
                         SlotNumber = currentSlotNumber,
                         ProfileName = parser.GetValue(section.SectionName, "profile_name", "New Profile"),
+                        HdrStageControlled = ParseBool(parser.GetValue(section.SectionName,"hdr_stage_controlled","no"))||chains.Values.Any(c=>c.Stages.Any(s=>s.Kind=="hdr")),
                         Chains = new AvaloniaList<UpscaleChain>(chains.Values.ToList())
                     };
                 }
@@ -1307,6 +1313,7 @@ chain_2_rife=no";
 
                 CurrentSlot.Vm = this;
                 CurrentSlot.ProfileName = parser.GetValue(sectionKey, "profile_name", "New Profile");
+                CurrentSlot.HdrStageControlled = ParseBool(parser.GetValue(sectionKey,"hdr_stage_controlled","no"))||chains.Values.Any(c=>c.Stages.Any(s=>s.Kind=="hdr"));
                 CurrentSlot.Chains = new AvaloniaList<UpscaleChain>(chains.Values.ToList());
             }
             reading.Dispose();
@@ -1418,6 +1425,7 @@ chain_2_rife=no";
             {
                 var section = $"slot_{profile.SlotNumber}";
                 parser.SetValue(section, "profile_name", profile.ProfileName);
+                if(profile.HdrStageControlled)parser.SetValue(section,"hdr_stage_controlled","yes");
 
                 foreach (var chain in profile.Chains)
                 {
@@ -1471,10 +1479,12 @@ chain_2_rife=no";
 
         public ConfigParser ParsedAnimeJaNaiProfileConf(UpscaleSlot slot)
         {
+            if(slot.Chains.Sum(c=>c.Stages.Count(s=>s.Kind=="hdr"))>1)throw new InvalidDataException("Only one HDR conversion stage is allowed per profile, across all its chains.");
             var parser = new ConfigParser();
             var section = "slot";
 
             parser.SetValue(section, "profile_name", slot.ProfileName);
+            if(slot.HdrStageControlled)parser.SetValue(section,"hdr_stage_controlled","yes");
             foreach (var chain in slot.Chains)
             {
                 parser.SetValue(section, $"chain_{chain.ChainNumber}_min_resolution", string.Create(ENGLISH_CULTURE, $"{chain.MinResolution}"));
@@ -2316,6 +2326,8 @@ chain_2_rife=no";
             get => _slotNumber;
             set => this.RaiseAndSetIfChanged(ref _slotNumber, value);
         }
+
+        [DataMember] public bool HdrStageControlled { get; set; }
 
         public bool ActiveSlot => ((Vm?.ShowCustomProfiles ?? false) && IsCustomSlot || (Vm?.ShowDefaultProfiles ?? false) && !IsCustomSlot) && SlotNumber == Vm?.SelectedSlotNumber;
 

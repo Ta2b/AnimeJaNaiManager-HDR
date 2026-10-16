@@ -23,7 +23,7 @@
         <Button Content="Add interpolation" Command="{Binding AddInterpolationStage}" Margin="0,0,8,0" />
         <Button Content="Add upscale" Command="{Binding AddUpscaleStage}" Margin="0,0,8,0" />
         <Button Content="Add downscale" Command="{Binding AddDownscaleStage}" Margin="0,0,8,0" />
-        <Button Content="Add HDR" IsEnabled="False" ToolTip.Tip="A compatible HDR stage is required." />
+        <Button Content="Add HDR" Command="{Binding AddHdrStage}" IsEnabled="{Binding CanAddHdrStage}" ToolTip.Tip="{Binding HdrSetupHint}" />
       </WrapPanel>
       <Button Content="Install optional engines…" Command="{Binding ShowOptionalEngines}" HorizontalAlignment="Left" />
       <StackPanel IsVisible="{Binding HasImportedResize}" Spacing="4">
@@ -82,6 +82,14 @@
                   <ComboBox ItemsSource="{Binding ResizeUnitChoices}" SelectedItem="{Binding ResizeUnit}" />
                   <TextBox Name="DownscaleHeight" Grid.Column="1" Text="{Binding ResizeValue}" />
                 </Grid>
+                <StackPanel IsVisible="{Binding IsHdr}" Spacing="5">
+                  <Grid ColumnDefinitions="150,*"><TextBlock Text="Target peak (nits)" VerticalAlignment="Center" /><TextBox Name="HdrPeak" Grid.Column="1" Text="{Binding HdrPeak}" /></Grid>
+                  <Expander Header="Advanced HDR settings"><StackPanel Spacing="5">
+                    <Grid ColumnDefinitions="150,*"><TextBlock Text="Contrast (0–200)" /><TextBox Grid.Column="1" Text="{Binding HdrContrast}" /></Grid>
+                    <Grid ColumnDefinitions="150,*"><TextBlock Text="Saturation (0–200)" /><TextBox Grid.Column="1" Text="{Binding HdrSaturation}" /></Grid>
+                    <Grid ColumnDefinitions="150,*"><TextBlock Text="Middle grey (10–100)" /><TextBox Grid.Column="1" Text="{Binding HdrMiddleGray}" /></Grid>
+                  </StackPanel></Expander>
+                </StackPanel>
                 <TextBlock Text="{Binding AvailabilityLabel}" ToolTip.Tip="{Binding Availability}" TextWrapping="Wrap" />
                 <Expander Header="Stage details"><StackPanel><TextBlock Text="{Binding Id, StringFormat='Stable ID: {0}'}" /><TextBlock Text="{Binding OptionsText}" TextWrapping="Wrap" /></StackPanel></Expander>
               </StackPanel>
@@ -90,7 +98,7 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
 
-      <TextBlock Text="New stages start inactive. Complete their files/settings before activation. Moving an active stage changes processing order; factors multiply." TextWrapping="Wrap" />
+      <TextBlock Text="New stages start inactive and are inserted before HDR. Complete their files/settings before activation. Moving an active stage changes processing order; factors multiply." TextWrapping="Wrap" />
       <Expander Header="Other interpolation methods"><TextBlock Text="{Binding OtherInterpolationMethods}" TextWrapping="Wrap" /></Expander>
     </StackPanel>
   </StackPanel>

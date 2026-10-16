@@ -85,7 +85,7 @@ public partial class UpscaleChain
             if (TryLegacyProjection(out _)) return "Lossless legacy-compatible layout: the existing reader arithmetic and screen synchronization are retained.";
             var n=plan.OutputCadence(new(1,1));
             if (n.Denominator!=1 || n.Numerator>16) return "This mixed cadence is unavailable: the current Linux reader requires integer stage factors and a cumulative factor ≤16.";
-            return "Explicit mixed cadence. Linux NVIDIA/TensorRT reader required; GPU/color capability negotiated at playback. FRUC can produce severe artifacts on flashes and occlusions. No TrueHDR tagging on mixed chains.";
+            return "Linux NVIDIA/TensorRT reader required; GPU/color capability negotiated at playback. TrueHDR converts pixels to HDR10 after the SDR stages. FRUC can produce severe artifacts on flashes and occlusions.";
         }
     }
     public void LoadPipeline(IReadOnlyDictionary<string,string> section,string backend,string policy)
@@ -144,11 +144,13 @@ public partial class UpscaleChain
     public string FrucSetupHint => Vm?.OptionalSdks?.FrucStatus ?? "Install the Optical Flow SDK from Optional engines.";
     public void ShowOptionalEngines() => Vm?.ShowOptionalEngines();
     public void AddFrucStage() => AddStage("nvidia-fruc","interpolate","cuda","fast","",2);
+    public void AddHdrStage() {if(!CanAddHdrStage)return;if(OwnerProfile is {} profile)profile.HdrStageControlled=true;AddStage("nvidia-truehdr","hdr","cuda","quality","",1);}
+    public string HdrSetupHint => ProfileHdrCount>0?"This profile already contains its single HDR conversion stage.":Vm?.OptionalSdks?.TrueHdrStatus??"Install the TrueHDR SDK from Optional engines.";
     public void AddDownscaleStage() => AddStage("area","resize","cuda","quality","",1);
     public void AddUpscaleStage() => AddStage("onnx","upscale","tensorrt","quality",Vm?.GetAllModels().FirstOrDefault()??"",1);
     private UpscaleSlot? OwnerProfile => Vm?.AnimeJaNaiConf?.UpscaleSlots.Concat(Vm.DefaultUpscaleSlots??[]).FirstOrDefault(p=>p.Chains.Contains(this));
     public int ProfileHdrCount => OwnerProfile?.Chains.Sum(c=>c.Stages.Count(s=>s.Kind=="hdr"))??Stages.Count(s=>s.Kind=="hdr");
-    public bool CanAddHdrStage => PipelineEditable&&ProfileHdrCount==0&&OwnerProfile?.Chains.All(c=>c.PipelineEditable)!=false;
+    public bool CanAddHdrStage => PipelineEditable&&ProfileHdrCount==0&&Vm?.OptionalSdks?.TrueHdrReady==true&&OwnerProfile?.Chains.All(c=>c.PipelineEditable)!=false;
     public string ProfileHdrNotice => ProfileHdrCount>1?"Only one HDR conversion stage is allowed per profile, across all its chains.":"";
     public bool HasImportedResize => Stages.Any(s=>s.IsUpscale&&s.HasAttachedResize);
     public bool CanSplitImportedResize => HasImportedResize&&Stages.Count+Stages.Count(s=>s.IsUpscale&&s.HasAttachedResize)<=InterpolationPipeline.MaxStages&&Stages.Where(s=>s.IsUpscale&&s.HasAttachedResize).All(s=>s.CanSplitResize);
@@ -173,9 +175,17 @@ public partial class UpscaleChain
         EnableOrderedPipeline();if(!OrderedPipeline || Stages.Count>=InterpolationPipeline.MaxStages || !PipelineEditable)return;
         var options=new Dictionary<string,string>();
         if(kind=="resize")options["target_height"]="720";
+        if(kind=="hdr") {
+            options["sdk_root"]=Vm?.OptionalSdks?.TrueHdrRoot??"/usr/local/VideoFX";
+            options["contrast"]=(Vm?.HdrSettings?.RtxContrast??100).ToString(CultureInfo.InvariantCulture);
+            options["saturation"]=(Vm?.HdrSettings?.RtxSaturation??100).ToString(CultureInfo.InvariantCulture);
+            options["middle_gray"]=(Vm?.HdrSettings?.RtxMiddleGray??50).ToString(CultureInfo.InvariantCulture);
+            options["peak"]="1000";
+        }
         if(method=="nvidia-fruc") options["kernel_fatbin"]=Path.Combine(InterpolationStage.InferenceDirectory,"aji_fruc.fatbin");
         var stage=new InterpolationStage(this,new(Guid.NewGuid().ToString("N"),kind,method,runtime,false,model,new(factor,1),policy,options));
-        Stages.Add(stage);ChangedPipeline();
+        int hdrIndex=Stages.ToList().FindIndex(s=>s.Kind=="hdr");
+        if(kind!="hdr"&&hdrIndex>=0)Stages.Insert(hdrIndex,stage);else Stages.Add(stage);ChangedPipeline();
     }
     public void DeleteStage(InterpolationStage stage) { if(PipelineEditable&&Stages.Remove(stage))ChangedPipeline(); }
     public void MoveStage(InterpolationStage stage,int delta)
@@ -187,11 +197,12 @@ public partial class UpscaleChain
     }
     internal void ChangedPipeline()
     {
-        RefreshPipeline();if(!PipelineEditing && AutoSave)Vm?.WriteAnimeJaNaiConf();
+        if(OwnerProfile is {} profile)foreach(var chain in profile.Chains)chain.RefreshPipeline();else RefreshPipeline();
+        Vm?.RaisePropertyChanged(nameof(MainWindowViewModel.LegacyHdrConversionVisible));if(!PipelineEditing && AutoSave)Vm?.WriteAnimeJaNaiConf();
     }
     public void RefreshPipeline()
     {
-        foreach(string name in new[]{nameof(OrderedPipeline),nameof(LegacyEditorVisible),nameof(PipelineEditable),nameof(PipelineReadError),nameof(Stages),nameof(PipelineCadence),nameof(PipelineOrder),nameof(PipelineNotice),nameof(CanUseLegacyEditor),nameof(CanAddFruc),nameof(HasImportedResize),nameof(CanAddHdrStage),nameof(ProfileHdrNotice),nameof(CanSplitImportedResize),nameof(FrucSetupHint)}) this.RaisePropertyChanged(name);
+        foreach(string name in new[]{nameof(OrderedPipeline),nameof(LegacyEditorVisible),nameof(PipelineEditable),nameof(PipelineReadError),nameof(Stages),nameof(PipelineCadence),nameof(PipelineOrder),nameof(PipelineNotice),nameof(CanUseLegacyEditor),nameof(CanAddFruc),nameof(HasImportedResize),nameof(CanAddHdrStage),nameof(HdrSetupHint),nameof(ProfileHdrNotice),nameof(CanSplitImportedResize),nameof(FrucSetupHint)}) this.RaisePropertyChanged(name);
         foreach(var stage in Stages)stage.Refresh();
     }
     internal bool TryPlan(out InterpolationPipeline.Plan plan,out string error)
@@ -276,7 +287,7 @@ public sealed class InterpolationStage : ReactiveObject
     [DataMember] public string Denominator { get=>_denominator;set=>Set(ref _denominator,value); }
     [DataMember] public bool Enabled { get=>_enabled;set { if(_enabled==value)return;this.RaiseAndSetIfChanged(ref _enabled,value);Changed(); } }
     public string Category => Kind switch {"interpolate"=>"Interpolation","upscale"=>"Upscale","resize"=>"Downscale","hdr"=>"HDR",_=>Kind};
-    public string[] MethodChoices => Kind switch {"interpolate"=>["RIFE","NVIDIA FRUC"],"upscale"=>["ONNX upscale"],"resize"=>["Area"],_=>[MethodChoice]};
+    public string[] MethodChoices => Kind switch {"interpolate"=>["RIFE","NVIDIA FRUC"],"upscale"=>["ONNX upscale"],"resize"=>["Area"],"hdr"=>["NVIDIA TrueHDR"],_=>[MethodChoice]};
     public StageTechnology[] TechnologyChoices => _technologies;
     public StageTechnology SelectedTechnology {
         get=>TechnologyChoices.FirstOrDefault(t=>t.Name==MethodChoice)??new(MethodChoice,false,"Provider unavailable.");
@@ -285,7 +296,7 @@ public sealed class InterpolationStage : ReactiveObject
     public string[] PolicyChoices => ["quality","fast"];
     public string MethodChoice
     {
-        get=>Method switch {"area"=>"Area","rife"=>"RIFE","nvidia-fruc"=>"NVIDIA FRUC","onnx"=>"ONNX upscale",_=>Method};
+        get=>Method switch {"nvidia-truehdr"=>"NVIDIA TrueHDR","area"=>"Area","rife"=>"RIFE","nvidia-fruc"=>"NVIDIA FRUC","onnx"=>"ONNX upscale",_=>Method};
         set
         {
             if(value==MethodChoice || !MethodChoices.Contains(value)||!TechnologyEditable)return;
@@ -295,6 +306,7 @@ public sealed class InterpolationStage : ReactiveObject
                 _options.Clear();Model="";Numerator="2";Denominator="1";Enabled=false;
                 switch(value)
                 {
+                    case "NVIDIA TrueHDR":Method="nvidia-truehdr";Runtime="cuda";Policy="quality";Numerator="1";break;
                     case "Area":Method="area";Runtime="cuda";Policy="quality";Numerator="1";TargetHeight="720";break;
                     case "RIFE":Kind="interpolate";Method="rife";Runtime="tensorrt";Policy="quality";Model="426";break;
                     case "NVIDIA FRUC":Kind="interpolate";Method="nvidia-fruc";Runtime="cuda";Policy="fast";KernelFatbin=Path.Combine(InferenceDirectory,"aji_fruc.fatbin");break;
@@ -311,6 +323,7 @@ public sealed class InterpolationStage : ReactiveObject
     public bool IsFruc => Method=="nvidia-fruc";
     public bool IsUpscale => Kind=="upscale";
     public bool IsResize => Kind=="resize";
+    public bool IsHdr => Kind=="hdr";
     public bool HasModel => IsRife||IsUpscale;
     public bool HasAttachedResize => ResizeHeight!="0"||ResizeFactor!="100";
     public bool CanSplitResize => int.TryParse(ResizeHeight,NumberStyles.None,CultureInfo.InvariantCulture,out int height)&&int.TryParse(ResizeFactor,NumberStyles.None,CultureInfo.InvariantCulture,out int factor)&&(height is >=32 and <=8192||height==0&&factor is >=1 and <=100);
@@ -320,12 +333,13 @@ public sealed class InterpolationStage : ReactiveObject
     public string ModeNotice => Method switch {
         "rife" when Policy=="quality" => "Full RIFE prediction (reference).",
         "rife" when Policy=="fast" => "Motion shortcuts can alter contours.",
+        "nvidia-truehdr" => "Converts SDR BT.709 to HDR10 (PQ / BT.2020). SDK input is 8-bit. Place it after the current SDR engines. An HDR-only chain preserves an already-HDR source without converting it again.",
         "area" => "Preserves aspect ratio. Smaller sources stay unchanged. Downscaling reduces spatial detail.",
         "nvidia-fruc" => "SDR8 ×2. Artifacts can be severe on flashes, fast light changes and occlusions. Prefer RIFE for these scenes.",
         _ => ""
     };
 
-    public string OrderDescription => IsResize ? (ResizeByPercent?$"Downscale to {TargetPercent}% (Area)":$"Downscale ≤{TargetHeight}p (Area)") : IsUpscale
+    public string OrderDescription => IsHdr ? "NVIDIA TrueHDR → HDR10" : IsResize ? (ResizeByPercent?$"Downscale to {TargetPercent}% (Area)":$"Downscale ≤{TargetHeight}p (Area)") : IsUpscale
         ? ((ResizeHeight!="0" ? $"Resize to {ResizeHeight}p → " : ResizeFactor!="100" ? $"Resize to {ResizeFactor}% → " : "")+"ONNX upscale")
         : IsInterpolation ? $"{MethodChoice} ×{Numerator}"+(Denominator!="1"?$"/{Denominator}":"") : MethodChoice;
     public bool CanMoveUp => _chain.Stages.IndexOf(this)>0;
@@ -348,6 +362,20 @@ public sealed class InterpolationStage : ReactiveObject
     public string KernelFatbin {get=>Get("kernel_fatbin");set=>Option("kernel_fatbin",value);}
     public string ResizeHeight {get=>Get("resize_height_before_upscale","0");set=>Option("resize_height_before_upscale",value);}
     public string ResizeFactor {get=>Get("resize_factor_before_upscale","100");set=>Option("resize_factor_before_upscale",value);}
+    public string HdrSdkRoot => Get("sdk_root",_chain.Vm?.OptionalSdks?.TrueHdrRoot??"/usr/local/VideoFX");
+    public string HdrContrast {get=>Get("contrast","100");set=>Option("contrast",value);}
+    public string HdrSaturation {get=>Get("saturation","100");set=>Option("saturation",value);}
+    public string HdrMiddleGray {get=>Get("middle_gray","50");set=>Option("middle_gray",value);}
+    public string HdrPeak {get=>Get("peak","1000");set=>Option("peak",value);}
+    private string HdrError {
+        get {
+            foreach(var value in new[]{HdrContrast,HdrSaturation})if(!int.TryParse(value,NumberStyles.None,CultureInfo.InvariantCulture,out int n)||n>200)return "HDR contrast and saturation must be integers from 0 to 200.";
+            if(!int.TryParse(HdrMiddleGray,NumberStyles.None,CultureInfo.InvariantCulture,out int middle)||middle<10||middle>100)return "HDR middle grey must be an integer from 10 to 100.";
+            if(!int.TryParse(HdrPeak,NumberStyles.None,CultureInfo.InvariantCulture,out int peak)||peak<400||peak>2000)return "HDR target peak must be an integer from 400 to 2000 nits.";
+            if(_chain.Stages.Skip(_chain.Stages.IndexOf(this)+1).Any(s=>s.Enabled))return "HDR must be the last active stage; the following engines currently require SDR.";
+            return "";
+        }
+    }
     public string TargetHeight {get=>Get("target_height","720");set=>Option("target_height",value);}
     public string TargetPercent {get=>Get("target_percent","50");set=>Option("target_percent",value);}
     public bool ResizeByPercent => _options.ContainsKey("target_percent");
@@ -362,7 +390,7 @@ public sealed class InterpolationStage : ReactiveObject
         : (!int.TryParse(TargetHeight,NumberStyles.None,CultureInfo.InvariantCulture,out int height)||height<32||height>8192?"Downscale height must be an integer from 32 to 8192.":"");
     public string Frames {get=>Get("frames","0");set=>Option("frames",value);}
     public string TemporalThreshold {get=>Get("temporal_scene_threshold","0.150");set=>Option("temporal_scene_threshold",value);}
-    public bool TechnologyEditable => _options.Keys.All(k=>(IsRife?new[]{"ensemble","scene_detect_threshold"}:IsFruc?new[]{"sdk_library","sdk_runtime","kernel_fatbin"}:IsUpscale?new[]{"resize_factor_before_upscale","resize_height_before_upscale","frames","temporal_scene_threshold"}:IsResize?new[]{"target_height","target_percent"}:Array.Empty<string>()).Contains(k));
+    public bool TechnologyEditable => _options.Keys.All(k=>(IsRife?new[]{"ensemble","scene_detect_threshold"}:IsFruc?new[]{"sdk_library","sdk_runtime","kernel_fatbin"}:IsUpscale?new[]{"resize_factor_before_upscale","resize_height_before_upscale","frames","temporal_scene_threshold"}:IsResize?new[]{"target_height","target_percent"}:IsHdr?new[]{"sdk_root","contrast","saturation","middle_gray","peak"}:Array.Empty<string>()).Contains(k));
     public string OptionsText => string.Join("; ",_options.OrderBy(k=>k.Key).Select(k=>$"{k.Key}={k.Value}"));
     public string Availability
     {
@@ -370,10 +398,11 @@ public sealed class InterpolationStage : ReactiveObject
         {
             if(!_chain.TryPlan(out var plan,out var error))return error;
             var stage=ToStage();
-            var known=Method=="rife"?new[]{"ensemble","scene_detect_threshold"}:Method=="nvidia-fruc"?new[]{"sdk_library","sdk_runtime","kernel_fatbin"}:IsResize?new[]{"target_height","target_percent"}:new[]{"resize_factor_before_upscale","resize_height_before_upscale","frames","temporal_scene_threshold"};
+            var known=Method=="rife"?new[]{"ensemble","scene_detect_threshold"}:Method=="nvidia-fruc"?new[]{"sdk_library","sdk_runtime","kernel_fatbin"}:IsResize?new[]{"target_height","target_percent"}:IsHdr?new[]{"sdk_root","contrast","saturation","middle_gray","peak"}:new[]{"resize_factor_before_upscale","resize_height_before_upscale","frames","temporal_scene_threshold"};
             if(_options.Keys.Except(known).Any())return "Option not implemented by this reader: "+string.Join(", ",_options.Keys.Except(known));
-            if(Kind!=(Method=="area"?"resize":Method=="onnx"?"upscale":"interpolate"))return "Method and stage kind do not match.";
+            if(Kind!=(Method=="area"?"resize":Method=="nvidia-truehdr"?"hdr":Method=="onnx"?"upscale":"interpolate"))return "Method and stage kind do not match.";
             if(IsResize&&ResizeError.Length>0)return ResizeError;
+            if(IsHdr&&HdrError.Length>0)return HdrError;
             if(Method=="rife" && (Get("ensemble","no") is not ("yes" or "no") || !decimal.TryParse(SceneThreshold,NumberStyles.Float,CultureInfo.InvariantCulture,out var scd)||scd<0||scd>1))return "RIFE requires ensemble=yes/no and a scene threshold0..1.";
             if(!_chain.CanProjectStage(Id))
             {
@@ -387,7 +416,11 @@ public sealed class InterpolationStage : ReactiveObject
             if(!MainWindowViewModel.OnLinux)return "Ordered mixed execution is currently Linux CUDA only; this stage is preserved for its target machine.";
             if(_chain.Vm?.AnimeJaNaiConf?.TensorRtSelected!=true)return "Mixed stages require the TensorRT backend. Legacy-equivalent settings may use the historical platform backend.";
             foreach(var name in new[]{"libaji_pipeline.so","aji_pipeline.fatbin","libaji_trt.so"})if(!File.Exists(Path.Combine(InferenceDirectory,name)))return "Missing reader module: "+name;
-            if(IsResize&&Runtime=="cuda") { if(!PipelineReaderFeatures.HasAreaDownscale(InferenceDirectory))return "Update the reader to enable independent downscale."; }
+            if(IsHdr&&Method=="nvidia-truehdr"&&Runtime=="cuda") {
+                if(!PipelineReaderFeatures.HasTrueHdr(InferenceDirectory))return "Update the reader to enable HDR stages.";
+                if(!OptionalSdkViewModel.HasTrueHdrSdk(HdrSdkRoot))return "TrueHDR SDK is missing. See Optional engines.";
+            }
+            else if(IsResize&&Runtime=="cuda") { if(!PipelineReaderFeatures.HasAreaDownscale(InferenceDirectory))return "Update the reader to enable independent downscale."; }
             else if(Method=="nvidia-fruc"&&Runtime=="cuda")
             {
                 if(Policy!="fast"||stage.Factor.Numerator!=2||stage.Factor.Denominator!=1)return "FRUC requires explicit Fast ×2; synthesis precision is SDR8bit.";
@@ -425,12 +458,18 @@ public sealed class InterpolationStage : ReactiveObject
     private void Changed(){if(!_loading)_chain.ChangedPipeline();}
     internal void Refresh()
     {
-        foreach(var technology in _technologies)technology.Update(technology.Name!="NVIDIA FRUC"||MainWindowViewModel.OnLinux&&(_chain.Vm?.OptionalSdks?.FrucReady==true||IsFruc&&Availability.StartsWith("Files present",StringComparison.Ordinal)),technology.Name=="NVIDIA FRUC"?_chain.FrucSetupHint:"");
-        foreach(var name in new[]{nameof(Header),nameof(Category),nameof(MethodChoice),nameof(TechnologyChoices),nameof(SelectedTechnology),nameof(ModelChoices),nameof(IsRife),nameof(IsFruc),nameof(IsUpscale),nameof(IsResize),nameof(HasModel),nameof(TargetHeight),nameof(TargetPercent),nameof(ResizeUnit),nameof(ResizeValue),nameof(HasAttachedResize),nameof(IsInterpolation),nameof(ModeNotice),nameof(OrderDescription),nameof(CanMoveUp),nameof(CanMoveDown),nameof(Availability),nameof(AvailabilityLabel),nameof(CanEnable),nameof(Ensemble),nameof(SceneThreshold),nameof(SdkLibrary),nameof(SdkRuntime),nameof(CanUseInstalledSdk),nameof(KernelFatbin),nameof(ResizeHeight),nameof(ResizeFactor),nameof(Frames),nameof(TemporalThreshold),nameof(OptionsText),nameof(TechnologyEditable)})this.RaisePropertyChanged(name);
+        foreach(var technology in _technologies) {
+            bool available=true;string reason="";
+            if(technology.Name=="NVIDIA FRUC") {available=MainWindowViewModel.OnLinux&&(_chain.Vm?.OptionalSdks?.FrucReady==true||IsFruc&&Availability.StartsWith("Files present",StringComparison.Ordinal));reason=_chain.FrucSetupHint;}
+            if(technology.Name=="NVIDIA TrueHDR") {available=MainWindowViewModel.OnLinux&&(_chain.Vm?.OptionalSdks?.TrueHdrReady==true||IsHdr&&Availability.StartsWith("Files present",StringComparison.Ordinal));reason=_chain.Vm?.OptionalSdks?.TrueHdrStatus??"Install the TrueHDR SDK.";}
+            technology.Update(available,reason);
+        }
+        foreach(var name in new[]{nameof(Header),nameof(Category),nameof(MethodChoice),nameof(TechnologyChoices),nameof(SelectedTechnology),nameof(ModelChoices),nameof(IsRife),nameof(IsFruc),nameof(IsUpscale),nameof(IsResize),nameof(IsHdr),nameof(HdrContrast),nameof(HdrSaturation),nameof(HdrMiddleGray),nameof(HdrPeak),nameof(HasModel),nameof(TargetHeight),nameof(TargetPercent),nameof(ResizeUnit),nameof(ResizeValue),nameof(HasAttachedResize),nameof(IsInterpolation),nameof(ModeNotice),nameof(OrderDescription),nameof(CanMoveUp),nameof(CanMoveDown),nameof(Availability),nameof(AvailabilityLabel),nameof(CanEnable),nameof(Ensemble),nameof(SceneThreshold),nameof(SdkLibrary),nameof(SdkRuntime),nameof(CanUseInstalledSdk),nameof(KernelFatbin),nameof(ResizeHeight),nameof(ResizeFactor),nameof(Frames),nameof(TemporalThreshold),nameof(OptionsText),nameof(TechnologyEditable)})this.RaisePropertyChanged(name);
     }
     internal InterpolationPipeline.Stage ToStage()
     {
         if(!long.TryParse(Numerator,NumberStyles.None,CultureInfo.InvariantCulture,out long n)||!long.TryParse(Denominator,NumberStyles.None,CultureInfo.InvariantCulture,out long d))throw new InvalidDataException("Stage factors require positive integers.");
+        if(IsHdr&&Enabled&&HdrError.Length>0)throw new InvalidDataException(HdrError);
         if(IsResize&&Enabled&&ResizeError.Length>0)throw new InvalidDataException(ResizeError);
         var options=new Dictionary<string,string>(_options);
         if(IsFruc) {options["sdk_library"]=SdkLibrary;options["sdk_runtime"]=SdkRuntime;options["kernel_fatbin"]=KernelFatbin;}

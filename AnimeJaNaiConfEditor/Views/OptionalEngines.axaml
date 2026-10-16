@@ -21,7 +21,8 @@
       <Border BorderBrush="Gray" BorderThickness="1" CornerRadius="4" Padding="16">
         <StackPanel Spacing="10">
           <TextBlock Text="NVIDIA TrueHDR" FontSize="18" FontWeight="SemiBold" />
-          <TextBlock Text="The Linux Maxine SDK needs both its Core and the TrueHDR feature. Its archive importer and HDR processing stage are separate integrations still in progress. This FRUC import does not enable TrueHDR. On Windows, the existing RTX Video path uses its own packaged runtime." TextWrapping="Wrap" />
+          <TextBlock Text="{Binding OptionalSdks.TrueHdrStatus}" TextWrapping="Wrap" />
+          <TextBlock Text="The Linux HDR stage uses the installed Maxine VideoFX Core and TrueHDR feature. This FRUC import does not install TrueHDR; its archive importer is a separate integration. On Windows, the existing RTX Video path uses its own packaged runtime." TextWrapping="Wrap" />
           <Button Content="NVIDIA TrueHDR installation guide" Command="{Binding OptionalSdks.OpenTrueHdrDownload}" HorizontalAlignment="Left" />
         </StackPanel>
       </Border>
