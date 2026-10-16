@@ -406,13 +406,15 @@
                   <NumericUpDown Value="{Binding HdrSettings.RifeMaxFactor}" Minimum="1" Maximum="8" Increment="1" FormatString="0" Width="120" />
                 </WrapPanel>
                 <WrapPanel>
-                  <TextBlock Text="RIFE interpolation engine" Width="200" VerticalAlignment="Center" />
-                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeEngineFast}" Content="Fast" />
-                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeEngineQuality}" Content="Quality" />
+                  <TextBlock Text="Temporal RIFE policy" Width="200" VerticalAlignment="Center" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeEngineFast}" Content="Fast (shortcuts)" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeEngineQuality}" Content="Full RIFE (Quality)" />
                 </WrapPanel>
-                <TextBlock Classes="help" TextWrapping="Wrap" Text="Quality: full RIFE prediction for every intermediate frame, followed by the configured upscale; no motion extrapolation, approximate drawing reuse or held-drawing retiming. Fast: reuse upscaled sources and motion when supported, with possible visual differences. Both keep execution optimizations. Restart playback to apply." />
+                <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding TemporalQualityNotice}" />
+                <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding GlobalFidelityNotice}" />
                 <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.RifeDrawings}" IsEnabled="{Binding AnimeJaNaiConf.RifeEngineFast}" Content="Spread the motion over held drawings" />
-                <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="Anime holds each drawing for two to four frames. On: the motion to the next drawing is spread over that whole time, so characters move continuously instead of jumping then stopping. Off: frame-to-frame interpolation. Fast mode only, on engines that support it; Quality ignores this option; restart the player to apply." />
+                <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding RetimingNotice}" />
+                <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding EnsemblePrecisionNotice}" />
                 <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.GpuSubtitles}" Content="Render subtitles on GPU (experimental)" IsVisible="{Binding WindowsFeatures}" />
                 <TextBlock Classes="help" Text="Renderer and experimental playback changes require restarting the player. Frame generation stays off until explicitly enabled." />
                 <Expander Header="RTX Video controls" IsEnabled="{Binding RtxHdrSelectable}" IsExpanded="False">
@@ -479,6 +481,7 @@
         <!-- Default Profile Settings -->
         <StackPanel IsVisible="{Binding ShowDefaultProfiles}">
           <StackPanel>
+            <TextBlock Classes="help" Margin="10" TextWrapping="Wrap" Text="{Binding SpatialQualityNotice}" />
             <Grid Margin="10,10,0,10">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -490,7 +493,7 @@
 
             <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="10,10,0,10">
               <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Model Preset</TextBlock>
+                <TextBlock Margin="0,0,5,0" VerticalAlignment="Center">Spatial Model Preset</TextBlock>
                 <ToggleButton IsChecked="{Binding CurrentDefaultStandardSelected}" Content="Standard" Command="{Binding SetCurrentDefaultStandard}" />
                 <ToggleButton IsChecked="{Binding CurrentDefaultSharpSelected}" Content="Sharp" Command="{Binding SetCurrentDefaultSharp}" />
               </StackPanel>

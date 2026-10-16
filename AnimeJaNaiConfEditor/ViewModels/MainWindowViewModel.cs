@@ -22,6 +22,11 @@ namespace AnimeJaNaiConfEditor.ViewModels
 
         public static MainWindowViewModel? Instance { get; private set; }
         public ReferenceExportViewModel Reference { get; } = new(() => RootDir);
+        public string SpatialQualityNotice => AnimeJaNai.Platform.QualitySemantics.Spatial;
+        public string TemporalQualityNotice => AnimeJaNai.Platform.QualitySemantics.Temporal;
+        public string GlobalFidelityNotice => AnimeJaNai.Platform.QualitySemantics.GlobalLock;
+        public string RetimingNotice => AnimeJaNai.Platform.QualitySemantics.Retiming;
+        public string EnsemblePrecisionNotice => AnimeJaNai.Platform.QualitySemantics.EnsemblePrecision;
 
         public MainWindowViewModel()
         {
@@ -2181,14 +2186,14 @@ chain_2_rife=no";
             get => _rifeEngine;
             private set
             {
-                var canonical = (value ?? "").Trim().ToLowerInvariant() is "old" or "quality" ? "quality" : "fast";
+                var canonical = AnimeJaNai.Platform.QualitySemantics.CanonicalTemporal(value);
                 this.RaiseAndSetIfChanged(ref _rifeEngine, canonical);
                 this.RaisePropertyChanged(nameof(RifeEngineFast));
                 this.RaisePropertyChanged(nameof(RifeEngineQuality));
             }
         }
         public void SetRifeEngine(string? value) =>
-            RifeEngine = (value ?? "").Trim().ToLowerInvariant() is "old" or "quality" ? "quality" : "fast";
+            RifeEngine = value ?? "";
         public bool RifeEngineFast { get => RifeEngine == "fast"; set { if (value) SetRifeEngine("fast"); else this.RaisePropertyChanged(); } }
         public bool RifeEngineQuality { get => RifeEngine == "quality"; set { if (value) SetRifeEngine("quality"); else this.RaisePropertyChanged(); } }
 
