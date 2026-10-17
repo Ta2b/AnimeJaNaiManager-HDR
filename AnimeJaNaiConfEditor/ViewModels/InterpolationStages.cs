@@ -355,6 +355,8 @@ public sealed class InterpolationStage : ReactiveObject
     private string ResolveSdkPath(string key,string? installed) {
         string saved=Get(key);return saved.Length==0||_chain.Vm?.OptionalSdks?.IsManagedPath(saved)==true?installed??"":saved;
     }
+    public bool CanUseInstalledHdrSdk => IsHdr&&_chain.Vm?.OptionalSdks?.TrueHdrReady==true&&HdrSdkRoot!=_chain.Vm.OptionalSdks.TrueHdrRoot;
+    public void UseInstalledHdrSdk() {if(CanUseInstalledHdrSdk)Option("sdk_root",_chain.Vm!.OptionalSdks.TrueHdrRoot);}
     public bool CanUseInstalledSdk => IsFruc&&_chain.Vm?.OptionalSdks?.InstalledFruc!=null&&new[]{"sdk_library","sdk_runtime"}.Any(k=>Get(k).Length>0&&_chain.Vm.OptionalSdks.IsManagedPath(Get(k))!=true);
     public void UseInstalledSdk() {
         if(!CanUseInstalledSdk)return;_options.Remove("sdk_library");_options.Remove("sdk_runtime");Changed();
@@ -464,7 +466,7 @@ public sealed class InterpolationStage : ReactiveObject
             if(technology.Name=="NVIDIA TrueHDR") {available=MainWindowViewModel.OnLinux&&(_chain.Vm?.OptionalSdks?.TrueHdrReady==true||IsHdr&&Availability.StartsWith("Files present",StringComparison.Ordinal));reason=_chain.Vm?.OptionalSdks?.TrueHdrStatus??"Install the TrueHDR SDK.";}
             technology.Update(available,reason);
         }
-        foreach(var name in new[]{nameof(Header),nameof(Category),nameof(MethodChoice),nameof(TechnologyChoices),nameof(SelectedTechnology),nameof(ModelChoices),nameof(IsRife),nameof(IsFruc),nameof(IsUpscale),nameof(IsResize),nameof(IsHdr),nameof(HdrContrast),nameof(HdrSaturation),nameof(HdrMiddleGray),nameof(HdrPeak),nameof(HasModel),nameof(TargetHeight),nameof(TargetPercent),nameof(ResizeUnit),nameof(ResizeValue),nameof(HasAttachedResize),nameof(IsInterpolation),nameof(ModeNotice),nameof(OrderDescription),nameof(CanMoveUp),nameof(CanMoveDown),nameof(Availability),nameof(AvailabilityLabel),nameof(CanEnable),nameof(Ensemble),nameof(SceneThreshold),nameof(SdkLibrary),nameof(SdkRuntime),nameof(CanUseInstalledSdk),nameof(KernelFatbin),nameof(ResizeHeight),nameof(ResizeFactor),nameof(Frames),nameof(TemporalThreshold),nameof(OptionsText),nameof(TechnologyEditable)})this.RaisePropertyChanged(name);
+        foreach(var name in new[]{nameof(Header),nameof(Category),nameof(MethodChoice),nameof(TechnologyChoices),nameof(SelectedTechnology),nameof(ModelChoices),nameof(IsRife),nameof(IsFruc),nameof(IsUpscale),nameof(IsResize),nameof(IsHdr),nameof(HdrContrast),nameof(HdrSaturation),nameof(HdrMiddleGray),nameof(HdrPeak),nameof(HasModel),nameof(TargetHeight),nameof(TargetPercent),nameof(ResizeUnit),nameof(ResizeValue),nameof(HasAttachedResize),nameof(IsInterpolation),nameof(ModeNotice),nameof(OrderDescription),nameof(CanMoveUp),nameof(CanMoveDown),nameof(Availability),nameof(AvailabilityLabel),nameof(CanEnable),nameof(Ensemble),nameof(SceneThreshold),nameof(SdkLibrary),nameof(SdkRuntime),nameof(CanUseInstalledSdk),nameof(CanUseInstalledHdrSdk),nameof(HdrSdkRoot),nameof(KernelFatbin),nameof(ResizeHeight),nameof(ResizeFactor),nameof(Frames),nameof(TemporalThreshold),nameof(OptionsText),nameof(TechnologyEditable)})this.RaisePropertyChanged(name);
     }
     internal InterpolationPipeline.Stage ToStage()
     {

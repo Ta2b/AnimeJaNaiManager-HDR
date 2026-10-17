@@ -83,7 +83,8 @@
                   <TextBox Name="DownscaleHeight" Grid.Column="1" Text="{Binding ResizeValue}" />
                 </Grid>
                 <StackPanel IsVisible="{Binding IsHdr}" Spacing="5">
-                  <Grid ColumnDefinitions="150,*"><TextBlock Text="Target peak (nits)" VerticalAlignment="Center" /><TextBox Name="HdrPeak" Grid.Column="1" Text="{Binding HdrPeak}" /></Grid>
+                  <Button Content="Use installed TrueHDR SDK" Command="{Binding UseInstalledHdrSdk}" IsVisible="{Binding CanUseInstalledHdrSdk}" HorizontalAlignment="Left" />
+                <Grid ColumnDefinitions="150,*"><TextBlock Text="Target peak (nits)" VerticalAlignment="Center" /><TextBox Name="HdrPeak" Grid.Column="1" Text="{Binding HdrPeak}" /></Grid>
                   <Expander Header="Advanced HDR settings"><StackPanel Spacing="5">
                     <Grid ColumnDefinitions="150,*"><TextBlock Text="Contrast (0–200)" /><TextBox Grid.Column="1" Text="{Binding HdrContrast}" /></Grid>
                     <Grid ColumnDefinitions="150,*"><TextBlock Text="Saturation (0–200)" /><TextBox Grid.Column="1" Text="{Binding HdrSaturation}" /></Grid>

@@ -13,8 +13,8 @@
             <Button Name="ImportFrucSdk" Content="2. Import SDK ZIP…" Click="ImportFrucSdkClick" IsEnabled="{Binding OptionalSdks.CanImport}" />
           </WrapPanel>
           <TextBlock Text="Download the complete Optical Flow SDK ZIP and accept NVIDIA’s terms on their website. Import the ZIP here; its FRUC library and compatible CUDA runtime are installed together. No CUDA Toolkit installation or manual file paths are needed." TextWrapping="Wrap" />
-          <ProgressBar IsIndeterminate="True" IsVisible="{Binding OptionalSdks.IsBusy}" />
-          <Button Content="Cancel import" Command="{Binding OptionalSdks.Cancel}" IsVisible="{Binding OptionalSdks.IsBusy}" HorizontalAlignment="Left" />
+          <ProgressBar IsIndeterminate="True" IsVisible="{Binding OptionalSdks.IsFrucBusy}" />
+          <Button Content="Cancel import" Command="{Binding OptionalSdks.Cancel}" IsVisible="{Binding OptionalSdks.IsFrucBusy}" HorizontalAlignment="Left" />
           <TextBlock Text="{Binding OptionalSdks.Status}" TextWrapping="Wrap" />
         </StackPanel>
       </Border>
@@ -22,8 +22,14 @@
         <StackPanel Spacing="10">
           <TextBlock Text="NVIDIA TrueHDR" FontSize="18" FontWeight="SemiBold" />
           <TextBlock Text="{Binding OptionalSdks.TrueHdrStatus}" TextWrapping="Wrap" />
-          <TextBlock Text="The Linux HDR stage uses the installed Maxine VideoFX Core and TrueHDR feature. This FRUC import does not install TrueHDR; its archive importer is a separate integration. On Windows, the existing RTX Video path uses its own packaged runtime." TextWrapping="Wrap" />
-          <Button Content="NVIDIA TrueHDR installation guide" Command="{Binding OptionalSdks.OpenTrueHdrDownload}" HorizontalAlignment="Left" />
+          <TextBlock Text="Download the Linux Maxine VideoFX Core and TrueHDR feature, accepting NVIDIA’s terms on their website. Import both archives here, in either order. Their runtime files and dependencies are installed locally; no administrator access or manual paths are needed. On Windows, the existing RTX Video path uses its own packaged runtime." TextWrapping="Wrap" />
+          <WrapPanel>
+            <Button Content="1. NVIDIA download guide" Command="{Binding OptionalSdks.OpenTrueHdrDownload}" Margin="0,0,8,0" />
+            <Button Name="ImportTrueHdrSdk" Content="2. Import Core / TrueHDR archives…" Click="ImportTrueHdrSdkClick" IsEnabled="{Binding OptionalSdks.CanImport}" />
+          </WrapPanel>
+          <ProgressBar IsIndeterminate="True" IsVisible="{Binding OptionalSdks.IsTrueHdrBusy}" />
+          <Button Content="Cancel import" Command="{Binding OptionalSdks.Cancel}" IsVisible="{Binding OptionalSdks.IsTrueHdrBusy}" HorizontalAlignment="Left" />
+          <TextBlock Text="{Binding OptionalSdks.TrueHdrImportStatus}" TextWrapping="Wrap" />
         </StackPanel>
       </Border>
       <WrapPanel>
