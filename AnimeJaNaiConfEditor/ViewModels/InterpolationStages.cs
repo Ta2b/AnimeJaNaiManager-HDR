@@ -361,6 +361,10 @@ public sealed class InterpolationStage : ReactiveObject
     public void UseInstalledSdk() {
         if(!CanUseInstalledSdk)return;_options.Remove("sdk_library");_options.Remove("sdk_runtime");Changed();
     }
+    public bool FrucArtifactProtection {get=>Get("artifact_protection","yes")=="yes";set=>Option("artifact_protection",value?"yes":"no");}
+    public bool FrucProtectionAvailable => IsFruc&&PipelineReaderFeatures.HasFrucProtection(InferenceDirectory);
+    public bool FrucProtectionToggleEnabled => FrucArtifactProtection||FrucProtectionAvailable;
+    public string FrucProtectionNotice => FrucArtifactProtection?"Unreliable FRUC synthesis repeats the previous image. This avoids severe blocks at the cost of local fluidity; it does not repair the NVIDIA SDK.":"Standard FRUC output, including possible severe artifacts on fast light changes and occlusions.";
     public string KernelFatbin {get=>Get("kernel_fatbin");set=>Option("kernel_fatbin",value);}
     public string ResizeHeight {get=>Get("resize_height_before_upscale","0");set=>Option("resize_height_before_upscale",value);}
     public string ResizeFactor {get=>Get("resize_factor_before_upscale","100");set=>Option("resize_factor_before_upscale",value);}
@@ -392,7 +396,7 @@ public sealed class InterpolationStage : ReactiveObject
         : (!int.TryParse(TargetHeight,NumberStyles.None,CultureInfo.InvariantCulture,out int height)||height<32||height>8192?"Downscale height must be an integer from 32 to 8192.":"");
     public string Frames {get=>Get("frames","0");set=>Option("frames",value);}
     public string TemporalThreshold {get=>Get("temporal_scene_threshold","0.150");set=>Option("temporal_scene_threshold",value);}
-    public bool TechnologyEditable => _options.Keys.All(k=>(IsRife?new[]{"ensemble","scene_detect_threshold"}:IsFruc?new[]{"sdk_library","sdk_runtime","kernel_fatbin"}:IsUpscale?new[]{"resize_factor_before_upscale","resize_height_before_upscale","frames","temporal_scene_threshold"}:IsResize?new[]{"target_height","target_percent"}:IsHdr?new[]{"sdk_root","contrast","saturation","middle_gray","peak"}:Array.Empty<string>()).Contains(k));
+    public bool TechnologyEditable => _options.Keys.All(k=>(IsRife?new[]{"ensemble","scene_detect_threshold"}:IsFruc?new[]{"sdk_library","sdk_runtime","kernel_fatbin","artifact_protection"}:IsUpscale?new[]{"resize_factor_before_upscale","resize_height_before_upscale","frames","temporal_scene_threshold"}:IsResize?new[]{"target_height","target_percent"}:IsHdr?new[]{"sdk_root","contrast","saturation","middle_gray","peak"}:Array.Empty<string>()).Contains(k));
     public string OptionsText => string.Join("; ",_options.OrderBy(k=>k.Key).Select(k=>$"{k.Key}={k.Value}"));
     public string Availability
     {
@@ -400,7 +404,7 @@ public sealed class InterpolationStage : ReactiveObject
         {
             if(!_chain.TryPlan(out var plan,out var error))return error;
             var stage=ToStage();
-            var known=Method=="rife"?new[]{"ensemble","scene_detect_threshold"}:Method=="nvidia-fruc"?new[]{"sdk_library","sdk_runtime","kernel_fatbin"}:IsResize?new[]{"target_height","target_percent"}:IsHdr?new[]{"sdk_root","contrast","saturation","middle_gray","peak"}:new[]{"resize_factor_before_upscale","resize_height_before_upscale","frames","temporal_scene_threshold"};
+            var known=Method=="rife"?new[]{"ensemble","scene_detect_threshold"}:Method=="nvidia-fruc"?new[]{"sdk_library","sdk_runtime","kernel_fatbin","artifact_protection"}:IsResize?new[]{"target_height","target_percent"}:IsHdr?new[]{"sdk_root","contrast","saturation","middle_gray","peak"}:new[]{"resize_factor_before_upscale","resize_height_before_upscale","frames","temporal_scene_threshold"};
             if(_options.Keys.Except(known).Any())return "Option not implemented by this reader: "+string.Join(", ",_options.Keys.Except(known));
             if(Kind!=(Method=="area"?"resize":Method=="nvidia-truehdr"?"hdr":Method=="onnx"?"upscale":"interpolate"))return "Method and stage kind do not match.";
             if(IsResize&&ResizeError.Length>0)return ResizeError;
@@ -425,6 +429,8 @@ public sealed class InterpolationStage : ReactiveObject
             else if(IsResize&&Runtime=="cuda") { if(!PipelineReaderFeatures.HasAreaDownscale(InferenceDirectory))return "Update the reader to enable independent downscale."; }
             else if(Method=="nvidia-fruc"&&Runtime=="cuda")
             {
+                if(Get("artifact_protection","yes") is not ("yes" or "no"))return "FRUC artifact protection must be yes or no.";
+                if(FrucArtifactProtection&&!FrucProtectionAvailable)return "Update the player to enable FRUC artifact protection, or explicitly disable this protection for standard FRUC.";
                 if(Policy!="fast"||stage.Factor.Numerator!=2||stage.Factor.Denominator!=1)return "FRUC requires explicit Fast ×2; synthesis precision is SDR8bit.";
                 foreach(var path in new[]{SdkLibrary,SdkRuntime,KernelFatbin})if(!Path.IsPathFullyQualified(path)||!File.Exists(path))return "FRUC SDK is missing. Import the Optical Flow SDK ZIP from Optional engines.";
                 if(!File.Exists(Path.Combine(InferenceDirectory,"libaji_fruc.so")))return "Missing provider libaji_fruc.so.";
@@ -466,7 +472,7 @@ public sealed class InterpolationStage : ReactiveObject
             if(technology.Name=="NVIDIA TrueHDR") {available=MainWindowViewModel.OnLinux&&(_chain.Vm?.OptionalSdks?.TrueHdrReady==true||IsHdr&&Availability.StartsWith("Files present",StringComparison.Ordinal));reason=_chain.Vm?.OptionalSdks?.TrueHdrStatus??"Install the TrueHDR SDK.";}
             technology.Update(available,reason);
         }
-        foreach(var name in new[]{nameof(Header),nameof(Category),nameof(MethodChoice),nameof(TechnologyChoices),nameof(SelectedTechnology),nameof(ModelChoices),nameof(IsRife),nameof(IsFruc),nameof(IsUpscale),nameof(IsResize),nameof(IsHdr),nameof(HdrContrast),nameof(HdrSaturation),nameof(HdrMiddleGray),nameof(HdrPeak),nameof(HasModel),nameof(TargetHeight),nameof(TargetPercent),nameof(ResizeUnit),nameof(ResizeValue),nameof(HasAttachedResize),nameof(IsInterpolation),nameof(ModeNotice),nameof(OrderDescription),nameof(CanMoveUp),nameof(CanMoveDown),nameof(Availability),nameof(AvailabilityLabel),nameof(CanEnable),nameof(Ensemble),nameof(SceneThreshold),nameof(SdkLibrary),nameof(SdkRuntime),nameof(CanUseInstalledSdk),nameof(CanUseInstalledHdrSdk),nameof(HdrSdkRoot),nameof(KernelFatbin),nameof(ResizeHeight),nameof(ResizeFactor),nameof(Frames),nameof(TemporalThreshold),nameof(OptionsText),nameof(TechnologyEditable)})this.RaisePropertyChanged(name);
+        foreach(var name in new[]{nameof(Header),nameof(Category),nameof(MethodChoice),nameof(TechnologyChoices),nameof(SelectedTechnology),nameof(ModelChoices),nameof(IsRife),nameof(IsFruc),nameof(IsUpscale),nameof(IsResize),nameof(IsHdr),nameof(HdrContrast),nameof(HdrSaturation),nameof(HdrMiddleGray),nameof(HdrPeak),nameof(HasModel),nameof(TargetHeight),nameof(TargetPercent),nameof(ResizeUnit),nameof(ResizeValue),nameof(HasAttachedResize),nameof(IsInterpolation),nameof(ModeNotice),nameof(OrderDescription),nameof(CanMoveUp),nameof(CanMoveDown),nameof(Availability),nameof(AvailabilityLabel),nameof(CanEnable),nameof(Ensemble),nameof(SceneThreshold),nameof(SdkLibrary),nameof(SdkRuntime),nameof(CanUseInstalledSdk),nameof(CanUseInstalledHdrSdk),nameof(HdrSdkRoot),nameof(KernelFatbin),nameof(FrucArtifactProtection),nameof(FrucProtectionAvailable),nameof(FrucProtectionToggleEnabled),nameof(FrucProtectionNotice),nameof(ResizeHeight),nameof(ResizeFactor),nameof(Frames),nameof(TemporalThreshold),nameof(OptionsText),nameof(TechnologyEditable)})this.RaisePropertyChanged(name);
     }
     internal InterpolationPipeline.Stage ToStage()
     {

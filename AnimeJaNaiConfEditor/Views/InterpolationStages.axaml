@@ -77,6 +77,10 @@
                   <TextBox Width="90" Text="{Binding SceneThreshold}" />
                 </WrapPanel></Expander>
                 <Button Content="Use installed SDK" Command="{Binding UseInstalledSdk}" IsVisible="{Binding CanUseInstalledSdk}" HorizontalAlignment="Left" />
+                <StackPanel IsVisible="{Binding IsFruc}" Spacing="4">
+                  <CheckBox Name="FrucArtifactProtection" Content="Protect against severe FRUC artifacts" IsChecked="{Binding FrucArtifactProtection}" IsEnabled="{Binding FrucProtectionToggleEnabled}" />
+                  <TextBlock Text="{Binding FrucProtectionNotice}" TextWrapping="Wrap" />
+                </StackPanel>
                 <TextBlock IsVisible="{Binding IsFruc}" Text="SDK paths are managed automatically. Existing custom profile paths are preserved in Stage details." TextWrapping="Wrap" />
                 <Grid ColumnDefinitions="150,*" IsVisible="{Binding IsResize}">
                   <ComboBox ItemsSource="{Binding ResizeUnitChoices}" SelectedItem="{Binding ResizeUnit}" />
