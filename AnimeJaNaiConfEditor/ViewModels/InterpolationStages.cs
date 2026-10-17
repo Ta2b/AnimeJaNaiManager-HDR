@@ -375,7 +375,7 @@ public sealed class InterpolationStage : ReactiveObject
             var context=new ProfileResolver.Context(MainWindowViewModel.OnWindows?"windows":MainWindowViewModel.OnMac?"macos":"linux",
                 _chain.SelectedRuntime,InferenceDirectory,_chain.Vm?.OnnxPath??Path.Combine(MainWindowViewModel.DataDir,"onnx"),
                 Path.Combine(MainWindowViewModel.DataDir,"rife"),PipelineReaderFeatures.Read(InferenceDirectory),
-                _chain.Vm?.AnimeJaNaiConf?.RifeEngine??"fast");
+                _chain.Vm?.AnimeJaNaiConf?.RifeEngine??"fast",_chain.Vm?.AnimeJaNaiConf?.AppleDevice??"AUTO");
             var resolved=ProfileResolver.Resolve(candidate,context);
             var stage=resolved.Stages.Single(s=>s.Id==Id);
             if(stage.Status!="files-present")return new(false,stage.Reason,stage.Requirements.Any(r=>!r.Present));
