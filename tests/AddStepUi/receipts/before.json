@@ -1,0 +1,9 @@
+{
+  "passed": false,
+  "error": "menu click adds and selects interpolate",
+  "checks": [
+    "button enabled and focused: \uFF0B Add step",
+    "category menu opened: Interpolation",
+    "button enabled and focused: Interpolation"
+  ]
+}

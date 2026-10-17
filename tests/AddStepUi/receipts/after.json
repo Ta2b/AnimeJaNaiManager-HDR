@@ -1,0 +1,31 @@
+{
+  "passed": true,
+  "checks": [
+    "button enabled and focused: \uFF0B Add step",
+    "category menu opened: Interpolation",
+    "button enabled and focused: Interpolation",
+    "menu click adds and selects interpolate",
+    "menu closes after interpolate",
+    "button enabled and focused: \uFF0B Add step",
+    "category menu opened: Upscale",
+    "button enabled and focused: Upscale",
+    "menu click adds and selects upscale",
+    "menu closes after upscale",
+    "button enabled and focused: \uFF0B Add step",
+    "category menu opened: Downscale",
+    "button enabled and focused: Downscale",
+    "menu click adds and selects resize",
+    "menu closes after resize",
+    "button enabled and focused: \uFF0B Add step",
+    "category menu opened: HDR conversion",
+    "button enabled and focused: HDR conversion",
+    "menu click adds and selects hdr",
+    "menu closes after hdr",
+    "button enabled and focused: \uFF0B Add step",
+    "second HDR is unavailable in menu",
+    "save/reload preserves categories, ids, order and inactive settings",
+    "reader limit disables the add menu",
+    "unsupported schema remains read-only"
+  ],
+  "scope": "Real headless keyboard clicks on the production Flyout buttons; no direct AddStage calls; private profile fixture only."
+}
