@@ -1,9 +1,13 @@
-# Processing-chain interface — AH-314
+# Modular processing profiles
 
-The list is the execution order. The summary includes the pre-resize attached to each existing ONNX upscaler: placing RIFE above that upscaler means RIFE runs before the resize.
+Profiles are freely composed from four categories: Interpolation, Upscale, Downscale and HDR. Add a step, select its technology and settings, then enable it when the required files and combination are available. Reorder, disable or remove steps directly in the ordered list. The order summary describes the actual processing order; downscale before RIFE reduces its input resolution.
 
-Only RIFE offers Quality/Fast. FRUC has one implemented SDR8 ×2 mode; an ONNX spatial stage has no temporal mode. Historical shared RIFE settings live in the historical chain editor, hidden for an ordered chain, and have been removed from Global Settings. Their configuration keys remain intact for existing profiles.
+Only RIFE exposes Quality/Fast. Quality retains full predictions at every requested instant; Fast uses the supported temporal shortcuts. Modes belong to the step. The launcher projects a compatible single-RIFE profile into a private runtime configuration, so an old hidden global mode cannot override the selected mode.
 
-This UI lot does not change the video pipeline, model arithmetic, SDK provisioning or HDR placement. Independent downscale, archive import and explicit HDR stages are tracked in AH-315/316/317.
+There is at most one HDR step per profile, including inactive steps and alternate resolution rules. mpv HDR needs no SDK; NVIDIA TrueHDR requires its platform support and optional components. Current inference engines consume SDR, so HDR conversion remains last.
 
-Qualification: actual Avalonia headless controls, stage-mode binding, order summary after reorder, export/reload and source-comment preservation. Eight relevant assertions pass; the initial export-comment assertion was corrected because a new export does not copy comments from another file. Only that failed case was rerun. A rendered frame was inspected. No video trial is necessary for this interface-only change.
+Linux NVIDIA supports arbitrary delivered ordered combinations and independent Area/Spline36 downscale. Other readers accept their representable native layouts; unsupported combinations remain readable with an explicit reason. New methods are not substituted for imported methods. Historical sizing retains its original arithmetic and position until the user explicitly chooses downscale-only sizing.
+
+FRUC is retired. Imported FRUC settings and SDK files are preserved, but an active FRUC step is rejected. The three old built-in profiles are removed; existing custom profiles and unknown configuration data remain.
+
+The shared profile resolver supplies exact model requirements and availability reasons to the Manager and launcher. File presence is not a claim of GPU compatibility or measured speed. Consecutive inference groups do not guarantee that every backend can physically fuse them.

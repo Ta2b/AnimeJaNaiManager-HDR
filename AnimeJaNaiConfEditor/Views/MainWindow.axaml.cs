@@ -11,6 +11,7 @@ using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using ReactiveUI.Avalonia;
 using FluentAvalonia.UI.Controls;
 using FluentAvalonia.UI.Windowing;
@@ -32,6 +33,34 @@ namespace AnimeJaNaiConfEditor.Views
             AvaloniaXamlLoader.Load(this);
             Closing += MainWindow_Closing;
             Opened += MainWindow_Opened;
+            SizeChanged += (_, _) => ApplyResponsiveLayout();
+            Opened += (_, _) => ApplyResponsiveLayout();
+        }
+
+        private void ApplyResponsiveLayout()
+        {
+            bool compact = Bounds.Width < 1120;
+            Classes.Set("compact", compact);
+            foreach (var label in this.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Classes.Contains("nav-label"))) label.IsVisible = !compact;
+            if (this.FindControl<Grid>("ShellGrid") is { } shell) shell.ColumnDefinitions[0].Width = new GridLength(compact ? 76 : 204);
+            if (this.FindControl<Grid>("PageHost") is { } host) host.Margin = compact ? new Thickness(16, 20, 16, 16) : new Thickness(28, 24, 28, 20);
+            if (this.FindControl<Grid>("ProfileWorkspace") is { } workspace) workspace.ColumnDefinitions[0].Width = new GridLength(compact ? 0 : 216);
+            if (this.FindControl<Border>("ProfileSidebar") is { } sidebar) sidebar.IsVisible = !compact;
+            if (this.FindControl<ComboBox>("CompactProfilePicker") is { } picker) picker.IsVisible = compact;
+        }
+
+        private async void DeleteProfileButtonClick(object? sender, RoutedEventArgs e)
+        {
+            if (DataContext is not MainWindowViewModel vm || vm.CurrentSlot is not { } profile) return;
+            var dialog = new FAContentDialog
+            {
+                Title = $"Delete {profile.ProfileName}?",
+                Content = "This removes the profile's processing rules. A configuration backup is kept; your other profiles, models and components are preserved.",
+                PrimaryButtonText = "Delete profile",
+                CloseButtonText = "Keep profile",
+                DefaultButton = FAContentDialogButton.Close
+            };
+            if (await dialog.ShowAsync() == FAContentDialogResult.Primary) vm.DeleteCurrentProfile();
         }
 
         private void MainWindow_Opened(object? sender, EventArgs e)
@@ -43,11 +72,17 @@ namespace AnimeJaNaiConfEditor.Views
             }
         }
 
+        private bool _stoppingPreparation;
         private async void MainWindow_Closing(object? sender, WindowClosingEventArgs e)
         {
-            if (DataContext is MainWindowViewModel vm)
+            if (DataContext is MainWindowViewModel vm && vm.Preparation.IsBusy)
             {
-
+                e.Cancel = true;
+                if (_stoppingPreparation) return;
+                _stoppingPreparation = true;
+                try { await vm.Preparation.StopAsync(); }
+                finally { _stoppingPreparation = false; }
+                Close();
             }
         }
 

@@ -7,13 +7,22 @@ namespace AnimeJaNaiConfEditor.Views;
 public partial class OptionalEngines : UserControl
 {
     public OptionalEngines()=>InitializeComponent();
-    private async void ImportFrucSdkClick(object? sender,RoutedEventArgs e)
+    private async void PythonClick(object? sender,RoutedEventArgs e)
     {
-        if(DataContext is not MainWindowViewModel vm||!vm.OptionalSdks.CanImport)return;
+        if(DataContext is not MainWindowViewModel vm||vm.Preparation.IsBusy)return;
         var top=TopLevel.GetTopLevel(this);if(top==null)return;
-        var files=await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions{Title="Import NVIDIA Optical Flow SDK",AllowMultiple=false,FileTypeFilter=[new("Optical Flow SDK ZIP"){Patterns=["*.zip"]}]});
-        if(files.Count==1&&files[0].TryGetLocalPath() is { } path)await vm.OptionalSdks.ImportAsync(path);
+        var files=await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions{Title="Choose GMFSS Python executable",AllowMultiple=false});
+        if(files.Count==1&&files[0].TryGetLocalPath() is {} path)vm.Preparation.Python=path;
     }
+    private async System.Threading.Tasks.Task ChooseFolder(bool weights)
+    {
+        if(DataContext is not MainWindowViewModel vm||vm.Preparation.IsBusy)return;
+        var top=TopLevel.GetTopLevel(this);if(top==null)return;
+        var folders=await top.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions{Title=weights?"Choose GMFSS train_log weights":"Choose GMFSS source folder",AllowMultiple=false});
+        if(folders.Count==1&&folders[0].TryGetLocalPath() is {} path){if(weights)vm.Preparation.Weights=path;else vm.Preparation.ModelSource=path;}
+    }
+    private async void ModelClick(object? sender,RoutedEventArgs e)=>await ChooseFolder(false);
+    private async void WeightsClick(object? sender,RoutedEventArgs e)=>await ChooseFolder(true);
     private async void ImportTrueHdrSdkClick(object? sender,RoutedEventArgs e)
     {
         if(DataContext is not MainWindowViewModel vm||!vm.OptionalSdks.CanImport)return;

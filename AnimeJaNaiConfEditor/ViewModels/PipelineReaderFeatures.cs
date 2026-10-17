@@ -8,9 +8,10 @@ internal static class PipelineReaderFeatures
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate ulong Features();
     static readonly Dictionary<string,(long Size,long Stamp,ulong Value)> cache = new();
     public static bool HasAreaDownscale(string directory)=>(Read(directory)&1)!=0;
+    public static bool HasRenderHdr(string directory)=>(Read(directory)&8)!=0;
     public static bool HasTrueHdr(string directory)=>(Read(directory)&2)!=0;
-    public static bool HasFrucProtection(string directory)=>(Read(directory,"libaji_fruc.so","aji_fruc_features_v1")&1)!=0;
-    private static ulong Read(string directory,string library="libaji_pipeline.so",string symbol="aji_pipeline_features_v1")
+    public static bool HasSpline36Downscale(string directory)=>(Read(directory)&4)!=0;
+    public static ulong Read(string directory,string library="libaji_pipeline.so",string symbol="aji_pipeline_features_v1")
     {
         if(!MainWindowViewModel.OnLinux)return 0;
         string path=Path.GetFullPath(Path.Combine(directory,library));

@@ -27,6 +27,8 @@ namespace AnimeJaNaiConfEditor.ViewModels
         private readonly ConfLines _conf;
         private bool _loading;
         private bool _displayEdited;
+        private bool _conversionInProfiles;
+        public bool ConversionInProfiles => _conversionInProfiles;
 
         public HdrSettings(string path, string? legacyVendor = null)
         {
@@ -34,6 +36,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             _conf = ConfLines.Load(path);
             _loading = true;
             ReadValues(legacyVendor);
+            _conversionInProfiles=ParseBool(_conf.Get("conversion_in_profiles","no"));
             _loading = false;
 
             // Coalesce bursts (NumericUpDown spinning, toggle groups) into one write.
@@ -201,7 +204,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 this.RaisePropertyChanged(nameof(EnhancementControlsEnabled));
             }
         }
-        public bool EnhancementControlsEnabled => HdrConversion && Enhance;
+        public bool EnhancementControlsEnabled => Enhance;
 
         private decimal? _blackDepth = 15;
         public decimal? BlackDepth { get => _blackDepth; set => this.RaiseAndSetIfChanged(ref _blackDepth, Clamp(value, 0, 80, 15)); }
@@ -291,6 +294,12 @@ namespace AnimeJaNaiConfEditor.ViewModels
             Display.Read(_conf, legacyVendor);
         }
 
+        public void RetireLegacyConversion()
+        {
+            if(_conversionInProfiles)return;
+            _conversionInProfiles=true;Save();
+        }
+
         private readonly object _saveLock = new();
         public void Save()
         {
@@ -302,25 +311,29 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 _conf.Set("frame_generation", FrameGeneration);
                 _conf.Set("render_api", RenderApi);
                 _conf.Set("rtx_vsr_quality", ((int)(RtxVsrQuality ?? 2)).ToString(INV));
-                _conf.Set("rtx_contrast", ((int)(RtxContrast ?? 100)).ToString(INV));
-                _conf.Set("rtx_saturation", ((int)(RtxSaturation ?? 100)).ToString(INV));
-                _conf.Set("rtx_middle_gray", ((int)(RtxMiddleGray ?? 50)).ToString(INV));
+                if(!_conversionInProfiles)_conf.Set("rtx_contrast", ((int)(RtxContrast ?? 100)).ToString(INV));
+                if(!_conversionInProfiles)_conf.Set("rtx_saturation", ((int)(RtxSaturation ?? 100)).ToString(INV));
+                if(!_conversionInProfiles)_conf.Set("rtx_middle_gray", ((int)(RtxMiddleGray ?? 50)).ToString(INV));
                 _conf.Set("skip_held_frames", SkipHeldFrames ? "yes" : "no");
-                _conf.Set("mpv_truehdr_look", MpvTrueHdrLook ? "yes" : "no");
+                if(!_conversionInProfiles)_conf.Set("mpv_truehdr_look", MpvTrueHdrLook ? "yes" : "no");
                 _conf.Set("rife_display_sync", RifeDisplaySync ? "yes" : "no");
                 if (MainWindowViewModel.OnLinux || _conf.Get("smooth_motion", "") != "") _conf.Set("smooth_motion", SmoothMotion ? "yes" : "no");
                 _conf.Set("rife_max_factor", ((int)(RifeMaxFactor ?? 2)).ToString(INV));
                 _conf.Set("subtitle_white", ((int)(SubtitleWhite ?? 200)).ToString(INV));
-                _conf.Set("hdr_conversion", HdrConversion ? "yes" : "no");
-                _conf.Set("hdr_backend", Backend);
+                if(!_conversionInProfiles)_conf.Set("hdr_conversion", HdrConversion ? "yes" : "no");
+                if(!_conversionInProfiles)_conf.Set("hdr_backend", Backend);
                 _conf.Set("grade", Enhance ? "yes" : "no");
                 _conf.Set("shadows", Fraction(BlackDepth));
-                _conf.Set("paper_white", ((int)(SdrWhite ?? 203)).ToString(INV));
-                _conf.Set("highlights", Fraction(HighlightsMpv));
+                if(!_conversionInProfiles)_conf.Set("paper_white", ((int)(SdrWhite ?? 203)).ToString(INV));
+                if(!_conversionInProfiles)_conf.Set("highlights", Fraction(HighlightsMpv));
                 _conf.Set("highlights_rtx", Fraction(HighlightsRtx));
-                _conf.Set("vibrance", Fraction(VibranceMpv));
+                if(!_conversionInProfiles)_conf.Set("vibrance", Fraction(VibranceMpv));
                 _conf.Set("vibrance_rtx", Fraction(VibranceRtx));
                 _conf.Set("grade_native_hdr", EnhanceNativeHdr ? "yes" : "no");
+                if(_conversionInProfiles) {
+                    foreach(string key in new[]{"rtx_contrast","rtx_saturation","rtx_middle_gray","mpv_truehdr_look","hdr_conversion","hdr_backend","paper_white","highlights","vibrance"})_conf.Remove(key);
+                    _conf.Set("conversion_in_profiles","yes");
+                }
                 Display.Write(_conf);
                 try
                 {
@@ -554,6 +567,15 @@ namespace AnimeJaNaiConfEditor.ViewModels
             {
                 var comment = Regex.Match(_lines[i], @"\s+[#;].*$");
                 _lines[i] = line + (comment.Success ? comment.Value : "");
+            }
+        }
+
+        public void Remove(string key)
+        {
+            for(int i=_lines.Count-1;i>=0;i--) {
+                var match=KEY.Match(_lines[i]);if(!match.Success||match.Groups[1].Value!=key)continue;
+                var comment=Regex.Match(_lines[i],@"\s+[#;].*$");
+                if(comment.Success)_lines[i]=comment.Value.TrimStart();else _lines.RemoveAt(i);
             }
         }
 

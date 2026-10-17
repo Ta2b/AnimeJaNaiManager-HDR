@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:AnimeJaNaiConfEditor.ViewModels" x:Class="AnimeJaNaiConfEditor.Views.Preparation" x:DataType="vm:PreparationViewModel">
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="28" Spacing="20" MaxWidth="960" HorizontalAlignment="Stretch">
+    <StackPanel Spacing="8">
+      <TextBlock Classes="page-title" Text="Prepare a video" />
+      <TextBlock Classes="muted" Text="Create a smoother video with GMFSS Fortuna, then play the new file with any profile. Your source stays intact." TextWrapping="Wrap"/>
+    </StackPanel>
+    <Border Classes="card" Padding="20">
+      <StackPanel Spacing="12" IsEnabled="{Binding NotBusy}">
+        <TextBlock Classes="section-title" Text="1. Choose your video"/>
+        <TextBlock Text="Source video"/>
+        <Grid ColumnDefinitions="*,Auto"><TextBox Name="PreparationSource" Text="{Binding Source}" PlaceholderText="Choose a local SDR 8-bit video"/><Button Grid.Column="1" Content="Browse…" Click="SourceClick" Margin="8,0,0,0"/></Grid>
+        <TextBlock Text="New output file"/>
+        <Grid ColumnDefinitions="*,Auto"><TextBox Name="PreparationDestination" Text="{Binding Destination}" PlaceholderText="Choose a new .mkv file"/><Button Grid.Column="1" Content="Save as…" Click="DestinationClick" Margin="8,0,0,0"/></Grid>
+      </StackPanel>
+    </Border>
+    <Border Classes="card" Padding="20">
+      <StackPanel Spacing="12" IsEnabled="{Binding NotBusy}">
+        <TextBlock Classes="section-title" Text="2. Choose the output"/>
+        <WrapPanel>
+          <StackPanel Spacing="6" Margin="0,0,24,8"><TextBlock Text="Frame-rate multiplier"/><TextBox Name="PreparationFactor" Width="90" HorizontalAlignment="Left" Text="{Binding Factor}" PlaceholderText="2–8"/></StackPanel>
+          <StackPanel Spacing="6" Margin="0,0,24,8"><TextBlock Text="Audio"/><ComboBox Name="PreparationAudio" ItemsSource="{Binding AudioChoices}" SelectedValue="{Binding Audio}" Width="110"/></StackPanel>
+          <StackPanel Spacing="6" Margin="0,0,0,8"><TextBlock Text="Video format"/><ComboBox Name="PreparationCodec" ItemsSource="{Binding OutputCodecs}" SelectedValue="{Binding OutputCodec}" MinWidth="190"/></StackPanel>
+        </WrapPanel>
+        <TextBlock Text="{Binding OutputNotice}" TextWrapping="Wrap"/>
+        <Expander Header="Supported sources and timing">
+          <TextBlock Margin="0,10,0,0" Classes="muted" Text="This provider accepts constant-frame-rate SDR 8-bit video. It retains original images, the exact cadence and the final source hold. HDR, variable frame rates and unsupported color metadata are refused before preparation." TextWrapping="Wrap"/>
+        </Expander>
+      </StackPanel>
+    </Border>
+    <Border Classes="card" Padding="20">
+      <StackPanel Spacing="12">
+        <TextBlock Classes="section-title" Text="3. Check and prepare"/>
+        <TextBlock Text="{Binding EngineStatus}" TextWrapping="Wrap"/>
+        <Button Content="Configure GMFSS engine…" Command="{Binding ConfigureEngine}" HorizontalAlignment="Left"/>
+        <WrapPanel>
+          <Button Name="PreparationInspect" Content="Check files and timing" Click="InspectClick" IsEnabled="{Binding CanStart}" Margin="0,0,8,8"/>
+          <Button Name="PreparationRun" Classes="accent" Content="Prepare video" Click="PrepareClick" IsEnabled="{Binding CanStart}" Margin="0,0,8,8"/>
+          <Button Name="PreparationCancel" Content="Cancel" Command="{Binding Cancel}" IsEnabled="{Binding CanCancel}" IsVisible="{Binding IsBusy}" Margin="0,0,8,8"/>
+          <Button Name="PreparationOpen" Content="Open prepared video" Command="{Binding OpenPrepared}" IsVisible="{Binding CanOpen}" Margin="0,0,8,8"/>
+        </WrapPanel>
+        <ProgressBar Name="PreparationProgress" Minimum="0" Maximum="100" Value="{Binding Progress}" IsVisible="{Binding IsBusy}"/>
+        <TextBlock Name="PreparationStatus" Text="{Binding Status}" TextWrapping="Wrap"/>
+      </StackPanel>
+    </Border>
+  </StackPanel></ScrollViewer>
+</UserControl>

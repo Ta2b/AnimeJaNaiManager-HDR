@@ -1,41 +1,45 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:AnimeJaNaiConfEditor.ViewModels" x:Class="AnimeJaNaiConfEditor.Views.OptionalEngines" x:DataType="vm:MainWindowViewModel">
-  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-    <StackPanel Margin="24" Spacing="12" MaxWidth="900" HorizontalAlignment="Left">
-      <TextBlock Text="Optional engines" FontSize="22" FontWeight="SemiBold" />
-      <TextBlock Text="You can keep your current engines and return here later. NVIDIA SDKs are optional downloads from NVIDIA; the Manager imports their runtime files from the archive you choose." TextWrapping="Wrap" />
-      <Border BorderBrush="Gray" BorderThickness="1" CornerRadius="4" Padding="16">
-        <StackPanel Spacing="10">
-          <TextBlock Text="NVIDIA FRUC — Optical Flow SDK" FontSize="18" FontWeight="SemiBold" />
-          <TextBlock Text="Fast SDR8 interpolation ×2, usable after RIFE. Contour and mouth artifacts are possible. Requires the Linux NVIDIA reader." TextWrapping="Wrap" />
-          <TextBlock Name="FrucSdkStatus" Text="{Binding OptionalSdks.FrucStatus}" TextWrapping="Wrap" />
-          <WrapPanel>
-            <Button Content="1. Download from NVIDIA" Command="{Binding OptionalSdks.OpenFrucDownload}" Margin="0,0,8,0" />
-            <Button Name="ImportFrucSdk" Content="2. Import SDK ZIP…" Click="ImportFrucSdkClick" IsEnabled="{Binding OptionalSdks.CanImport}" />
-          </WrapPanel>
-          <TextBlock Text="Download the complete Optical Flow SDK ZIP and accept NVIDIA’s terms on their website. Import the ZIP here; its FRUC library and compatible CUDA runtime are installed together. No CUDA Toolkit installation or manual file paths are needed." TextWrapping="Wrap" />
-          <ProgressBar IsIndeterminate="True" IsVisible="{Binding OptionalSdks.IsFrucBusy}" />
-          <Button Content="Cancel import" Command="{Binding OptionalSdks.Cancel}" IsVisible="{Binding OptionalSdks.IsFrucBusy}" HorizontalAlignment="Left" />
-          <TextBlock Text="{Binding OptionalSdks.Status}" TextWrapping="Wrap" />
+  <StackPanel Spacing="16">
+    <Border Classes="card" Padding="20">
+      <StackPanel Spacing="12">
+        <TextBlock Classes="section-title" Text="HDR conversion" />
+        <TextBlock Text="mpv HDR is included. Add one HDR step to a profile and choose its technology there." TextWrapping="Wrap"/>
+        <Expander Header="Optional: NVIDIA TrueHDR">
+          <StackPanel Spacing="12" Margin="0,12,0,0">
+            <TextBlock Name="TrueHdrSdkStatus" Text="{Binding OptionalSdks.TrueHdrStatus}" TextWrapping="Wrap" />
+            <TextBlock Classes="muted" Text="On Linux, download the Maxine VideoFX Core and TrueHDR feature archives from NVIDIA. Import both here, in either order. The Manager installs their runtime files without manual paths. Windows uses its packaged RTX Video runtime." TextWrapping="Wrap" />
+            <WrapPanel>
+              <Button Content="1. NVIDIA download guide" Command="{Binding OptionalSdks.OpenTrueHdrDownload}" Margin="0,0,8,8" />
+              <Button Name="ImportTrueHdrSdk" Content="2. Import SDK archives…" Click="ImportTrueHdrSdkClick" IsEnabled="{Binding OptionalSdks.CanImport}" Margin="0,0,8,8"/>
+            </WrapPanel>
+            <ProgressBar IsIndeterminate="True" IsVisible="{Binding OptionalSdks.IsTrueHdrBusy}" />
+            <Button Content="Cancel import" Command="{Binding OptionalSdks.Cancel}" IsVisible="{Binding OptionalSdks.IsTrueHdrBusy}" HorizontalAlignment="Left" />
+            <TextBlock Text="{Binding OptionalSdks.TrueHdrImportStatus}" TextWrapping="Wrap" />
+          </StackPanel>
+        </Expander>
+      </StackPanel>
+    </Border>
+    <Border Classes="card" Padding="20">
+      <StackPanel Spacing="12">
+        <TextBlock Classes="section-title" Text="GMFSS Fortuna · video preparation"/>
+        <TextBlock Text="{Binding Preparation.MethodNotice}" TextWrapping="Wrap"/>
+        <TextBlock Classes="muted" Text="This engine prepares a new video file before playback. Its settings are separate from the real-time processing profile." TextWrapping="Wrap"/>
+        <StackPanel IsEnabled="{Binding Preparation.NotBusy}" Spacing="8">
+          <TextBlock Text="Python executable"/><Grid ColumnDefinitions="*,Auto"><TextBox Name="PreparationPython" Text="{Binding Preparation.Python}" PlaceholderText="Python with PyTorch, CUDA and CuPy"/><Button Grid.Column="1" Content="Browse…" Click="PythonClick" Margin="8,0,0,0"/></Grid>
+          <TextBlock Text="GMFSS source folder"/><Grid ColumnDefinitions="*,Auto"><TextBox Name="PreparationModel" Text="{Binding Preparation.ModelSource}" PlaceholderText="Official pinned GMFSS Fortuna source (0fb7ac1)"/><Button Grid.Column="1" Content="Browse…" Click="ModelClick" Margin="8,0,0,0"/></Grid>
+          <TextBlock Text="Weights folder"/><Grid ColumnDefinitions="*,Auto"><TextBox Name="PreparationWeights" Text="{Binding Preparation.Weights}" PlaceholderText="Folder containing the original train_log model files"/><Button Grid.Column="1" Content="Browse…" Click="WeightsClick" Margin="8,0,0,0"/></Grid>
+          <Expander Header="Advanced: FFmpeg tools">
+            <StackPanel Spacing="8" Margin="0,10,0,0">
+              <TextBlock Text="FFmpeg executable"/><TextBox Text="{Binding Preparation.Ffmpeg}"/>
+              <TextBlock Text="FFprobe executable"/><TextBox Text="{Binding Preparation.Ffprobe}"/>
+            </StackPanel>
+          </Expander>
         </StackPanel>
-      </Border>
-      <Border BorderBrush="Gray" BorderThickness="1" CornerRadius="4" Padding="16">
-        <StackPanel Spacing="10">
-          <TextBlock Text="NVIDIA TrueHDR" FontSize="18" FontWeight="SemiBold" />
-          <TextBlock Text="{Binding OptionalSdks.TrueHdrStatus}" TextWrapping="Wrap" />
-          <TextBlock Text="Download the Linux Maxine VideoFX Core and TrueHDR feature, accepting NVIDIA’s terms on their website. Import both archives here, in either order. Their runtime files and dependencies are installed locally; no administrator access or manual paths are needed. On Windows, the existing RTX Video path uses its own packaged runtime." TextWrapping="Wrap" />
-          <WrapPanel>
-            <Button Content="1. NVIDIA download guide" Command="{Binding OptionalSdks.OpenTrueHdrDownload}" Margin="0,0,8,0" />
-            <Button Name="ImportTrueHdrSdk" Content="2. Import Core / TrueHDR archives…" Click="ImportTrueHdrSdkClick" IsEnabled="{Binding OptionalSdks.CanImport}" />
-          </WrapPanel>
-          <ProgressBar IsIndeterminate="True" IsVisible="{Binding OptionalSdks.IsTrueHdrBusy}" />
-          <Button Content="Cancel import" Command="{Binding OptionalSdks.Cancel}" IsVisible="{Binding OptionalSdks.IsTrueHdrBusy}" HorizontalAlignment="Left" />
-          <TextBlock Text="{Binding OptionalSdks.TrueHdrImportStatus}" TextWrapping="Wrap" />
-        </StackPanel>
-      </Border>
-      <WrapPanel>
-        <Button Content="Continue to profiles" Command="{Binding ReturnToProfiles}" Margin="0,0,8,0" />
-        <Button Content="Refresh installed engines" Command="{Binding OptionalSdks.Refresh}" />
-      </WrapPanel>
-    </StackPanel>
-  </ScrollViewer>
+        <TextBlock Classes="muted" Text="Source and model identities are checked before export. Runtime files and model weights are not downloaded automatically." TextWrapping="Wrap"/>
+        <TextBlock Text="{Binding Preparation.EngineStatus}" TextWrapping="Wrap"/>
+      </StackPanel>
+    </Border>
+    <Button Content="Refresh installed engines" Command="{Binding OptionalSdks.Refresh}" HorizontalAlignment="Left"/>
+    <TextBlock Text="{Binding OptionalSdks.Status}" TextWrapping="Wrap"/>
+  </StackPanel>
 </UserControl>

@@ -1,0 +1,44 @@
+using AnimeJaNaiConfEditor.ViewModels;
+using AnimeJaNaiConfEditor.Views;
+using AnimeJaNai.Platform;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using ReactiveUI.Avalonia;
+using Salaros.Configuration;
+using System.Text.Json;
+string output=Path.GetFullPath(args[0]);Directory.CreateDirectory(output);if(File.Exists(Path.Combine(output,"summary.json")))throw new Exception("Conclusive receipt exists; no replay.");
+string data=Path.Combine(output,"data"),inf=Path.Combine(data,"inference"),opts=Path.Combine(output,"portable_config","script-opts");
+foreach(string d in new[]{data,inf,opts,Path.Combine(data,"onnx"),Path.Combine(data,"rife")})Directory.CreateDirectory(d);
+Environment.SetEnvironmentVariable("ANIMEJANAI_DATA_DIR",data);Environment.SetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR",inf);Environment.SetEnvironmentVariable("ANIMEJANAI_ROOT",output);
+File.WriteAllText(Path.Combine(data,"onnx","SPAN.onnx"),"UI weights fixture");File.WriteAllText(Path.Combine(data,"rife","rife_v4.26.onnx"),"UI weights fixture");
+File.WriteAllText(Path.Combine(opts,"animejanai_hdr_auto.conf"),"hdr_conversion=yes\nhdr_backend=mpv\nrtx_contrast=120\nrtx_saturation=90\nrtx_middle_gray=55\nmpv_truehdr_look=no\npaper_white=210\nhighlights=0.45\nvibrance=0.12\n");
+string original="# preserve comment\n[global]\nbackend=TensorRT\nrife_engine=quality\ndefault_slot=1002\nquality_preset=sharp\nfuture_global=preserve\n[slot_1]\nprofile_name=My custom profile\nchain_1_rife=yes\nchain_1_rife_model=426\nchain_1_rife_factor_numerator=5\nchain_1_rife_factor_denominator=2\nchain_1_rife_scene_detect_threshold=0.125\nchain_1_model_1_name=SPAN\nchain_1_model_1_resize_height_before_upscale=720\nchain_1_model_1_resize_factor_before_upscale=100\n";
+File.WriteAllText(Path.Combine(data,"animejanai.conf"),original);
+AppBuilder.Configure<AnimeJaNaiConfEditor.App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions{UseHeadlessDrawing=false}).WithInterFont().UseReactiveUI(_=>{}).SetupWithoutStarting();
+int resume=args.Length>1?int.Parse(args[1]):0;int observed=0;var checks=new List<string>();void Check(string name,bool ok){observed++;if(observed<=resume){checks.Add(name);return;}if(!ok)throw new Exception(name);checks.Add(name);Console.WriteLine("PASS "+name);}
+var vm=new MainWindowViewModel();vm.HandleShowCustomProfile("1");vm.AnimeJaNaiConf.SetTensorRtSelected();var chain=vm.CurrentSlot.Chains.Single();var hdr=chain.Stages.Last();
+Check("removed built-in default becomes Off with explanation and custom profile intact",vm.AnimeJaNaiConf.DefaultSlot==0&&vm.HasProfileMigrationNotice&&vm.CurrentSlot.ProfileName=="My custom profile");
+Check("legacy resize is a separate Downscale stage preserving original interpolation order and arguments",chain.Stages.Select(s=>s.Kind).SequenceEqual(new[]{"resize","interpolate","upscale","hdr"})&&chain.Stages[0].Method=="spline36"&&chain.Stages[0].TargetHeight=="720"&&chain.Stages[1].Numerator=="5"&&chain.Stages[1].Denominator=="2"&&!chain.Stages[2].OptionsText.Contains("resize_"));
+Check("global conversion migrates once to sdk-free mpv HDR with saved look settings",hdr.Method=="mpv"&&hdr.Runtime=="gpu-next"&&hdr.Enabled&&hdr.CanEnable&&hdr.HdrContrast=="120"&&hdr.HdrSaturation=="90"&&!hdr.MpvHdrLook&&hdr.MpvPaperWhite=="210"&&hdr.MpvHighlights=="45"&&hdr.MpvVibrance=="12");
+Check("opening migration does not overwrite the source configuration",File.ReadAllText(Path.Combine(data,"animejanai.conf"))==original);
+var view=new InterpolationStages{DataContext=chain};var window=new Window{Content=view,Width=1100,Height=1450};window.Show();Dispatcher.UIThread.RunJobs();
+Check("one category menu offers four stage categories and no old editor toggle",view.FindControl<Button>("AddProcessingStep")!=null&&!view.GetVisualDescendants().OfType<CheckBox>().Any(c=>c.Name=="OrderedStagesToggle"));
+Check("HDR technology remains inside HDR category and Nvidia stays unavailable without SDK",hdr.MethodChoices.SequenceEqual(new[]{"mpv HDR","NVIDIA TrueHDR"})&&hdr.TechnologyChoices.Single(t=>t.Name=="mpv HDR").Available&&!hdr.TechnologyChoices.Single(t=>t.Name=="NVIDIA TrueHDR").Available&&!chain.CanAddHdrStage);
+using(var frame=window.CaptureRenderedFrame()){if(frame==null)throw new Exception("No UI frame");frame.Save(Path.Combine(output,"categories-and-mpv-hdr.png"));}
+string saved=Path.Combine(output,"saved.conf");vm.WriteAnimeJaNaiConf(saved);var loaded=vm.ReadAnimeJaNaiConf(saved);var l=loaded.UpscaleSlots[0].Chains[0];
+Check("canonical save/reload preserves stage ids, HDR, legacy engine arguments and removes retired presets",l.Stages.Select(s=>s.Id).SequenceEqual(chain.Stages.Select(s=>s.Id))&&l.Stages.Count(s=>s.IsHdr)==1&&!File.ReadAllText(saved).Contains("quality_preset")&&File.ReadAllText(saved).Contains("chain_1_model_1_resize_height_before_upscale=720")&&File.ReadAllText(saved).Contains("chain_1_rife_factor_numerator=5"));
+var second=new UpscaleChain(false){Vm=vm,ChainNumber="2"};vm.CurrentSlot.Chains.Add(second);chain.RefreshPipeline();second.RefreshPipeline();hdr.Enabled=false;
+Check("inactive HDR still blocks a second HDR across all profile rules",!chain.CanAddHdrStage&&!second.CanAddHdrStage);hdr.Enabled=true;
+var future=vm.ReadAnimeJaNaiConf(new ConfigParser("[global]\nbackend=TensorRT\n[slot_1]\nprofile_name=Future\nchain_1_pipeline_version=99\nchain_1_stage_count=1\nchain_1_stage_1_future_option=keep\n"));
+Check("future schema remains read-only and its raw stage data is preserved",!future.UpscaleSlots[0].Chains[0].PipelineEditable&&MainWindowViewModel.ParsedAnimeJaNaiConf(future)!.ToString().Contains("chain_1_stage_1_future_option=keep"));
+var expected=InterpolationPipeline.InferencePlan(InterpolationPipeline.Read(new ConfigParser(saved).Sections.First(s=>s.SectionName=="slot_1").Keys.ToDictionary(k=>k.Name,k=>new ConfigParser(saved).GetValue("slot_1",k.Name)),1,"tensorrt","quality"));
+Check("single execution bridge has no HDR pixel stage and retains native Spline36 source calculation",expected.Stages.Count==2&&expected.Stages[1].Options["resize_height_before_upscale"]=="720"&&expected.Stages[0].Factor==new InterpolationPipeline.Rational(5,2));
+foreach(var platform in new[]{MainWindowViewModel.Os.Windows,MainWindowViewModel.Os.MacOS}){MainWindowViewModel.Platform=platform;var hdrOnly=new UpscaleChain(false){Vm=vm,ChainNumber="1"};hdrOnly.AddHdrStage();var portableHdr=hdrOnly.Stages.Single();Check("mpv HDR stays sdk-free on "+platform,portableHdr.CanEnable&&portableHdr.AvailabilityLabel=="Required files present");}MainWindowViewModel.Platform=MainWindowViewModel.Os.Linux;
+var main=new MainWindow{DataContext=vm,Width=1400,Height=1050};main.Show();vm.ReturnToProfiles();vm.HandleShowCustomProfile("1");Dispatcher.UIThread.RunJobs();
+Check("main profile view contains no built-in profile list or legacy model editor",!main.GetVisualDescendants().OfType<TextBlock>().Any(t=>t.Text?.Contains("Default Profiles (Read-only)")==true)&&!main.GetVisualDescendants().OfType<CheckBox>().Any(c=>c.Content?.ToString()=="Enable RIFE Interpolation"));
+using(var frame=main.CaptureRenderedFrame()){if(frame==null)throw new Exception("No main UI frame");frame.Save(Path.Combine(output,"manager-profiles.png"));}
+vm.HandleShowGlobalSettings();Dispatcher.UIThread.RunJobs();Check("global settings contain no HDR conversion/backend or RIFE mode duplicates",!main.GetVisualDescendants().OfType<CheckBox>().Any(c=>c.Content?.ToString()=="Convert SDR to HDR when HDR output is active")&&!main.GetVisualDescendants().OfType<TextBlock>().Any(t=>t.Text=="Conversion engine"||t.Text=="Legacy RIFE mode"));
+File.WriteAllText(Path.Combine(output,"summary.json"),JsonSerializer.Serialize(new{passed=true,checks,scope="New canonical editor/migration/HDR routing controls only; no engine or old conclusive tests replayed"},new JsonSerializerOptions{WriteIndented=true}));main.Close();window.Close();

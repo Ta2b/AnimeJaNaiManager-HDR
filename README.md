@@ -1,10 +1,8 @@
 # AnimeJaNai Manager
 
-RIFE now exposes **Quality** (full per-instant prediction and configured upscale,
-without approximate drawing reuse or retiming) and **Fast** (upscaled endpoint
-warping and supported temporal shortcuts). Execution optimizations apply to both.
-`rife_engine=old/new` remains readable as `quality/fast`; saved banks use the new
-names. Fast keeps the previous default. Restart playback after changing modes.
+The Manager has four main pages: **Profiles**, **Prepare**, **Engines & components** and **Settings**. Profiles remain freely modular: add Interpolation, Upscale, Downscale or HDR, then choose the technology inside that category. There are no built-in legacy profiles or duplicated global processing controls.
+
+RIFE **Quality** keeps full per-instant predictions. **Fast** keeps its explicit temporal shortcuts. Modes belong to each interpolation step. HDR has one step per profile with mpv or NVIDIA TrueHDR; current SDR inference requires HDR conversion last. FRUC is retired. Imported settings are preserved without silently substituting another engine. See [processing profiles](docs/CHAIN-UX.md) and [optional components](docs/OPTIONAL-SDKS.md).
 
 Native AMD integration (14 October 2026): MIGraphX + HIP is exposed on Windows
 and Linux when the native module, its Windows runtime and an eligible GPU are present. The
@@ -28,14 +26,14 @@ Formerly AnimeJaNaiConfEditor; the executable is `AnimeJaNaiManager.exe` and shi
 
 The page has one Display section for every GPU. New installs use automatic
 peak brightness and gamut, with OLED off unless explicitly confirmed. The
-player follows system HDR; SDR conversion and Natural grading are enabled
-when HDR output is negotiated. Advanced controls are collapsed. Existing
+player follows system HDR; SDR conversion belongs to the HDR step in each
+profile and is applied only when HDR output is negotiated. Advanced controls are collapsed. Existing
 settings and legacy display descriptions are preserved during migration.
 Windows Vulkan inference is deferred; this UI change keeps the existing engines.
 
 ## Experimental automatic display refresh
 
-In **Profiles**, enable **Automatic Display Refresh Rate (Experimental)** and
+In the display settings, enable **Automatic Display Refresh Rate (Experimental)** and
 restart the player. Local files are scanned before playback to choose one
 display refresh for the whole episode, including across seeks. Fixed-rate
 videos use an exact or near multiple. Mixed-rate videos prefer a common
@@ -55,7 +53,6 @@ support and the updated `animejanai_backend.lua`. It is saved as
 `[global] display_rate_match=yes` in `animejanai/animejanai.conf` and included
 in full config exports. It does not change the video frame rate or enable RIFE.
 
-![297521638-76a8db5b-8c67-4b0c-911a-9b02598fb37a](https://github.com/the-database/AnimeJaNaiConfEditor/assets/25811902/e3b5d268-794c-40d3-b0ae-2d781d98d6ae)
 
 ## Builds and releases
 

@@ -16,12 +16,13 @@ using System.Threading.Tasks;
 namespace AnimeJaNaiConfEditor.ViewModels
 {
     [DataContract]
-    public class MainWindowViewModel : ViewModelBase
+    public partial class MainWindowViewModel : ViewModelBase
     {
         private static readonly CultureInfo ENGLISH_CULTURE = CultureInfo.GetCultureInfo("en-US");
 
         public static MainWindowViewModel? Instance { get; private set; }
         public ReferenceExportViewModel Reference { get; } = new(() => RootDir);
+        public PreparationViewModel Preparation { get; } = new(() => RootDir, () => DataDir);
         public string SpatialQualityNotice => AnimeJaNai.Platform.QualitySemantics.Spatial;
         public string TemporalQualityNotice => AnimeJaNai.Platform.QualitySemantics.Temporal;
         public string GlobalFidelityNotice => AnimeJaNai.Platform.QualitySemantics.GlobalLock;
@@ -37,16 +38,12 @@ namespace AnimeJaNaiConfEditor.ViewModels
             HdrSettings = new HdrSettings(HdrConfPath,
                 _expectedBank.Contains("nvidia") ? "nvidia" : _expectedBank.Contains("amd") ? "amd" : null);
             OptionalSdks = new OptionalSdkViewModel(DataDir, RefreshOptionalSdkStages);
+            foreach(var profile in AnimeJaNaiConf.UpscaleSlots)MigrateLegacyHdr(profile);
             Engines = new EngineStore(DataDir);
             Engines.Refresh();
-            // Built after the user conf loads so the read-only default profiles reflect the saved
-            // standard/sharp preset.
-            RefreshDefaultProfiles();
-
-
             for (var i = 0; i < AnimeJaNaiConf.UpscaleSlots.Count; i++)
             {
-                AnimeJaNaiConf.UpscaleSlots[i].MpvProfileName = $"upscale-on-{i + 1}";
+                AnimeJaNaiConf.UpscaleSlots[i].MpvProfileName = $"upscale-on-{AnimeJaNaiConf.UpscaleSlots[i].SlotNumber}";
             }
 
             CheckAndDoBackup();
@@ -54,6 +51,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             SelectedMpvProfile = ReadCurrentProfileFromMpvConf();
 
             InitializeSelectedSlot();
+            InitializeNavigation();
 
             RefreshComponentAwareness();
             ComponentManager.Refreshed += RefreshComponentAwareness;
@@ -62,8 +60,8 @@ namespace AnimeJaNaiConfEditor.ViewModels
         }
 
         public OptionalSdkViewModel OptionalSdks { get; }
-        public void ShowOptionalEngines() => SelectedTabIndex = 3;
-        public void ReturnToProfiles() => SelectedTabIndex = 0;
+        public void ShowOptionalEngines() => ShowEngines();
+        public void ReturnToProfiles() => NavigateProfiles();
         private void RefreshOptionalSdkStages()
         {
             foreach (var slot in AnimeJaNaiConf.UpscaleSlots)
@@ -88,14 +86,13 @@ namespace AnimeJaNaiConfEditor.ViewModels
         public bool NotMacFeatures => !OnMac;
         // HDR output request (linux_hdr_output): Wayland on Linux, EDR on macOS.
         public bool HdrOutputChoice => OnLinux || OnMac;
-        public bool ShowDefaultProfileList => !OnMac;   // built-in slots 1001-1003: not bound on macOS
         public string HdrOutputLabel => OnMac ? "HDR output" : "Wayland output";
         public string HdrOutputAutoLabel => OnMac ? "Follow video" : "Follow system";
         public string BenchmarkDescription => OnMac
             ? "Measure the three engines on each processor of this Mac (GPU, Neural Engine, both) and rank them. It runs offscreen; close the player and leave the Mac idle meanwhile."
             : "Measure your real playback fps (the speed you will actually get) at several resolutions. Close the player and leave the computer idle while it runs. The first run builds a TensorRT engine per resolution.";
         public string HdrOutputHelp => OnMac
-            ? "Follow video keeps SDR video in SDR and HDR video in HDR. HDR PQ converts SDR video to HDR: for an XDR or other HDR display. Ctrl+H in the player switches the conversion, Ctrl+I shows the output diagnosis."
+            ? "Follow video keeps SDR video in SDR and HDR video in HDR. HDR PQ requests HDR output for an XDR or other HDR display. Add an HDR stage to convert SDR. Ctrl+H in the player switches the output, Ctrl+I shows the output diagnosis."
             : "Auto follows the compositor. Enable HDR in the desktop settings (GNOME, KDE) on a compatible display; grading requires negotiated PQ output. Ctrl+Alt+H shows the output diagnosis.";
         public string RifeMissingNote => OnMac
             ? "The RIFE models are missing from this installation."
@@ -164,7 +161,6 @@ namespace AnimeJaNaiConfEditor.ViewModels
 
         // ---- display upscaling and HDR (portable_config/script-opts/animejanai_hdr_auto.conf) ----
         public HdrSettings HdrSettings { get; }
-        public bool LegacyHdrConversionVisible => CurrentSlot?.HdrStageControlled!=true&&CurrentSlot?.Chains.All(c=>c.ProfileHdrCount==0)!=false;
         public EngineStore Engines { get; }
 
         public string[] HdrTargetResolutions { get; } =
@@ -353,7 +349,6 @@ namespace AnimeJaNaiConfEditor.ViewModels
             {
                 foreach (var chain in slot.Chains)
                 {
-                    chain.RaisePropertyChanged(nameof(UpscaleChain.RifeToggleEnabled));
                     chain.RefreshPipeline();
                 }
             }
@@ -365,7 +360,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         public int SelectedTabIndex
         {
             get => _selectedTabIndex;
-            set => this.RaiseAndSetIfChanged(ref _selectedTabIndex, value);
+            set { this.RaiseAndSetIfChanged(ref _selectedTabIndex, value); RefreshNavigation(); }
         }
 
         // First-run setup: if the hardware's recommended components are missing
@@ -379,7 +374,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             {
                 return;
             }
-            SelectedTabIndex = 1;
+            SelectedTabIndex = 2;
 
             var missing = ComponentManager.MissingPreselected;
             var lines = string.Join("\n",
@@ -408,76 +403,6 @@ namespace AnimeJaNaiConfEditor.ViewModels
             }
         }
 
-        // Rebuilds the read-only default profiles from DEFAULT_PROFILES_CONF, swapping each profile's
-        // HD models to their V3.1Sharp1 variants per its own preset. Standard and sharp HD model
-        // filenames differ only by the _HD_V3.1_ vs _HD_V3.1Sharp1_ token (the SD model has none).
-        public void RefreshDefaultProfiles()
-        {
-            DefaultUpscaleSlots = ReadAnimeJaNaiConf(new ConfigParser(DEFAULT_PROFILES_CONF)).UpscaleSlots;
-            DefaultUpscaleSlots[0].MpvProfileName = "upscale-on-quality";
-            DefaultUpscaleSlots[1].MpvProfileName = "upscale-on-balanced";
-            DefaultUpscaleSlots[2].MpvProfileName = "upscale-on-performance";
-            DefaultUpscaleSlots[0].DescriptionText = "Minimum Suggested GPU: NVIDIA RTX 4090";
-            DefaultUpscaleSlots[1].DescriptionText = "Minimum Suggested GPU: NVIDIA RTX 3080";
-            DefaultUpscaleSlots[2].DescriptionText = "Minimum Suggested GPU: NVIDIA RTX 3060";
-            if (AnimeJaNaiConf != null)
-            {
-                ApplySharp(DefaultUpscaleSlots[0], AnimeJaNaiConf.QualitySharp);
-                ApplySharp(DefaultUpscaleSlots[1], AnimeJaNaiConf.BalancedSharp);
-                ApplySharp(DefaultUpscaleSlots[2], AnimeJaNaiConf.PerformanceSharp);
-            }
-            this.RaisePropertyChanged(nameof(CurrentSlot));
-                this.RaisePropertyChanged(nameof(LegacyHdrConversionVisible));
-            this.RaisePropertyChanged(nameof(CurrentDefaultStandardSelected));
-            this.RaisePropertyChanged(nameof(CurrentDefaultSharpSelected));
-        }
-
-        private static void ApplySharp(UpscaleSlot slot, bool sharp)
-        {
-            if (!sharp)
-            {
-                return;
-            }
-            foreach (var chain in slot.Chains)
-            {
-                foreach (var model in chain.Models)
-                {
-                    if (model.Name != null && model.Name.Contains("_HD_V3.1_"))
-                    {
-                        model.Name = model.Name.Replace("_HD_V3.1_", "_HD_V3.1Sharp1_");
-                    }
-                }
-            }
-        }
-
-        // The Standard/Sharp toggle in the default-profiles view applies to whichever default profile
-        // is currently shown (CurrentSlot). These map slot 1/2/3 -> Quality/Balanced/Performance.
-        private bool CurrentDefaultSharpValue() => CurrentSlot?.SlotNumber switch
-        {
-            "1" => AnimeJaNaiConf?.QualitySharp ?? false,
-            "2" => AnimeJaNaiConf?.BalancedSharp ?? false,
-            "3" => AnimeJaNaiConf?.PerformanceSharp ?? false,
-            _ => false,
-        };
-
-        public bool CurrentDefaultSharpSelected => CurrentDefaultSharpValue();
-        public bool CurrentDefaultStandardSelected => !CurrentDefaultSharpValue();
-
-        public void SetCurrentDefaultStandard() => SetCurrentDefaultPreset(false);
-        public void SetCurrentDefaultSharp() => SetCurrentDefaultPreset(true);
-
-        private void SetCurrentDefaultPreset(bool sharp)
-        {
-            switch (CurrentSlot?.SlotNumber)
-            {
-                case "1": AnimeJaNaiConf.QualitySharp = sharp; break;
-                case "2": AnimeJaNaiConf.BalancedSharp = sharp; break;
-                case "3": AnimeJaNaiConf.PerformanceSharp = sharp; break;
-                default: return;
-            }
-            RefreshDefaultProfiles(); // also raises the toggle props
-        }
-
         private string[] _commonResolutions = [
             "0x0",
             "640x360",
@@ -497,69 +422,6 @@ namespace AnimeJaNaiConfEditor.ViewModels
         }
 
         public string[] BuilderOptimizationLevels { get; } = ["0", "1", "2", "3", "4", "5"];
-
-        private static readonly string DEFAULT_PROFILES_CONF = @"[slot_1]
-profile_name=Quality
-chain_1_min_resolution=1280x720
-chain_1_max_resolution=1920x1080
-chain_1_min_fps=0
-chain_1_max_fps=31
-chain_1_model_1_resize_height_before_upscale=0
-chain_1_model_1_resize_factor_before_upscale=100
-chain_1_model_1_name=2x_AnimeJaNai_HD_V3.1_Balanced_SPANF3_b8f64_unshuffle_fp16
-chain_1_rife=no
-chain_2_min_resolution=0x0
-chain_2_max_resolution=1280x720
-chain_2_min_fps=0
-chain_2_max_fps=31
-chain_2_model_1_resize_height_before_upscale=0
-chain_2_model_1_resize_factor_before_upscale=100
-chain_2_model_1_name=2x_AnimeJaNai_SD_V1beta34_Compact_1x3xHxW_dyn-HW_strong_fp16_op21_dynamo
-chain_2_rife=no
-chain_3_min_resolution=0x0
-chain_3_max_resolution=1920x1080
-chain_3_min_fps=0
-chain_3_max_fps=61
-chain_3_model_1_resize_height_before_upscale=0
-chain_3_model_1_resize_factor_before_upscale=100
-chain_3_model_1_name=2x_AnimeJaNai_HD_V3.1_Balanced_SPANF3_b8f64_unshuffle_fp16
-chain_3_rife=no
-[slot_2]
-profile_name=Balanced
-chain_1_min_resolution=1280x720
-chain_1_max_resolution=1920x1080
-chain_1_min_fps=0
-chain_1_max_fps=31
-chain_1_model_1_resize_height_before_upscale=0
-chain_1_model_1_resize_factor_before_upscale=100
-chain_1_model_1_name=2x_AnimeJaNai_HD_V3.1_Balanced_SPANF3_b8f64_unshuffle_fp16
-chain_1_rife=no
-chain_2_min_resolution=0x0
-chain_2_max_resolution=1280x720
-chain_2_min_fps=0
-chain_2_max_fps=31
-chain_2_model_1_resize_height_before_upscale=0
-chain_2_model_1_resize_factor_before_upscale=100
-chain_2_model_1_name=2x_AnimeJaNai_SD_V1beta34_Compact_1x3xHxW_dyn-HW_strong_fp16_op21_dynamo
-chain_2_rife=no
-[slot_3]
-profile_name=Performance
-chain_1_min_resolution=1280x720
-chain_1_max_resolution=1920x1080
-chain_1_min_fps=0
-chain_1_max_fps=31
-chain_1_model_1_resize_height_before_upscale=0
-chain_1_model_1_resize_factor_before_upscale=100
-chain_1_model_1_name=2x_AnimeJaNai_HD_V3.1_Performance_SPANF3_b5f48_unshuffle_fp16
-chain_1_rife=no
-chain_2_min_resolution=0x0
-chain_2_max_resolution=1280x720
-chain_2_min_fps=0
-chain_2_max_fps=31
-chain_2_model_1_resize_height_before_upscale=0
-chain_2_model_1_resize_factor_before_upscale=100
-chain_2_model_1_name=2x_AnimeJaNai_SD_V1beta34_Compact_1x3xHxW_dyn-HW_strong_fp16_op21_dynamo
-chain_2_rife=no";
 
         public string ExePath = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
 
@@ -612,19 +474,6 @@ chain_2_rife=no";
             set => this.RaiseAndSetIfChanged(ref _showGlobalSettings, value);
         }
 
-        private bool _showDefaultProfiles;
-        [DataMember]
-        public bool ShowDefaultProfiles
-        {
-            get => _showDefaultProfiles;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _showDefaultProfiles, value);
-                this.RaisePropertyChanged(nameof(CurrentSlot));
-                this.RaisePropertyChanged(nameof(LegacyHdrConversionVisible));
-            }
-        }
-
         private bool _showCustomProfiles = true; // TODO 
         [DataMember]
         public bool ShowCustomProfiles
@@ -634,7 +483,6 @@ chain_2_rife=no";
             {
                 this.RaiseAndSetIfChanged(ref _showCustomProfiles, value);
                 this.RaisePropertyChanged(nameof(CurrentSlot));
-                this.RaisePropertyChanged(nameof(LegacyHdrConversionVisible));
             }
         }
 
@@ -647,9 +495,6 @@ chain_2_rife=no";
             {
                 this.RaiseAndSetIfChanged(ref _selectedSlotNumber, value);
                 this.RaisePropertyChanged(nameof(CurrentSlot));
-                this.RaisePropertyChanged(nameof(LegacyHdrConversionVisible));
-                this.RaisePropertyChanged(nameof(CurrentDefaultStandardSelected));
-                this.RaisePropertyChanged(nameof(CurrentDefaultSharpSelected));
             }
         }
 
@@ -662,6 +507,7 @@ chain_2_rife=no";
             {
                 this.RaiseAndSetIfChanged(ref _selectedMpvProfile, value);
                 this.RaisePropertyChanged(nameof(MpvConfDetected));
+                this.RaisePropertyChanged(nameof(DefaultProfileAction));
             }
         }
 
@@ -670,25 +516,16 @@ chain_2_rife=no";
 
         public void HandleShowGlobalSettings()
         {
-            ShowGlobalSettings = true;
-            ShowCustomProfiles = false;
-            ShowDefaultProfiles = false;
-        }
-
-        public void HandleShowDefaultProfile(string slotNumber)
-        {
-            ShowGlobalSettings = false;
-            ShowDefaultProfiles = true;
-            ShowCustomProfiles = false;
-            SelectedSlotNumber = slotNumber;
+            SelectedTabIndex = 3;
         }
 
         public void HandleShowCustomProfile(string slotNumber)
         {
             ShowGlobalSettings = false;
             ShowCustomProfiles = true;
-            ShowDefaultProfiles = false;
             SelectedSlotNumber = slotNumber;
+            SelectedTabIndex = 0;
+            RefreshProfileSelection();
         }
 
         private AnimeJaNaiConf _animeJaNaiConf;
@@ -700,8 +537,7 @@ chain_2_rife=no";
 
         public UpscaleSlot CurrentSlot
         {
-            get => ShowCustomProfiles ? AnimeJaNaiConf.UpscaleSlots.Where(slot => slot.SlotNumber == SelectedSlotNumber).FirstOrDefault() :
-                ShowDefaultProfiles ? DefaultUpscaleSlots.Where(slot => slot.SlotNumber == SelectedSlotNumber).FirstOrDefault() : null;
+            get => ShowCustomProfiles ? AnimeJaNaiConf.UpscaleSlots.FirstOrDefault(slot => slot.SlotNumber == SelectedSlotNumber) : null;
         }
 
         private UpscaleSlot? _selectedProfileToClone;
@@ -756,19 +592,9 @@ chain_2_rife=no";
             }
         }
 
-        private AvaloniaList<UpscaleSlot> _defaultUpscaleSlots = [];
-        [DataMember]
-        public AvaloniaList<UpscaleSlot> DefaultUpscaleSlots
-        {
-            get => _defaultUpscaleSlots;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _defaultUpscaleSlots, value);
-                this.RaisePropertyChanged(nameof(AllSlots));
-            }
-        }
-
-        public AvaloniaList<UpscaleSlot> AllSlots => new(DefaultUpscaleSlots.Concat(AnimeJaNaiConf?.UpscaleSlots?.Where(x => x.ShowSlot && !x.ActiveSlot)));
+        public AvaloniaList<UpscaleSlot> AllSlots => new(AnimeJaNaiConf?.UpscaleSlots.Where(x=>x.ShowSlot&&!x.ActiveSlot)??[]);
+        public string ProfileMigrationNotice { get; private set; } = "";
+        public bool HasProfileMigrationNotice => ProfileMigrationNotice.Length>0;
 
         private bool _showAdvancedSettings = false;
         [DataMember]
@@ -836,21 +662,8 @@ chain_2_rife=no";
 
         public void RefreshBackendModelLists()
         {
-            foreach (var slot in AnimeJaNaiConf.UpscaleSlots)
-                foreach (var chain in slot.Chains)
-                {
-                    foreach (var model in chain.Models) model.AllModels = GetAllModels();
-                    chain.RifeModelList = new(RifeModels);
-                    // Linux: Vulkan only has RIFE 4.6, TensorRT has every model but 4.6. A profile kept
-                    // across an engine change would name a model its new engine cannot load.
-                    if (LinuxFeatures && chain.RifeModelList.Count > 0 && !chain.RifeModelList.Contains(chain.RifeModel))
-                    {
-                        string preferred = RifeValueToLabel("426");
-                        chain.RifeModel = chain.RifeModelList.Contains(preferred) ? preferred : chain.RifeModelList[^1];
-                    }
-                    chain.RaisePropertyChanged(nameof(UpscaleChain.RifeToggleEnabled));
-                    chain.RefreshPipeline();
-                }
+            foreach(var profile in AnimeJaNaiConf.UpscaleSlots)
+                foreach(var chain in profile.Chains)chain.RefreshPipeline();
         }
 
         public void Validate()
@@ -1049,10 +862,9 @@ chain_2_rife=no";
             animeJaNaiConf.SetRifeDevice(parser.GetValue("global", "engine_rife_device", "auto"));
             animeJaNaiConf.EngineBoost = ParseBool(parser.GetValue("global", "engine_boost", "no"));
 
-            if (int.TryParse(parser.GetValue("global", "default_slot", ""), out var defaultSlot))
-            {
-                animeJaNaiConf.DefaultSlot = defaultSlot;
-            }
+            int.TryParse(parser.GetValue("global","default_slot","0"),out int defaultSlot);
+            if(defaultSlot>=1000)ProfileMigrationNotice="The three old built-in profiles were removed. Startup is Off; your custom profiles are preserved.";
+            animeJaNaiConf.DefaultSlot=defaultSlot is >=0 and <=9?defaultSlot:0;
 
             animeJaNaiConf.SetRifeEngine(parser.GetValue("global", "rife_engine", "fast"));
             animeJaNaiConf.RifeDrawings = !parser.GetValue("global", "rife_drawings", "yes").Trim()
@@ -1087,123 +899,57 @@ chain_2_rife=no";
                 ? DEFAULT_TRT_ENGINE_SETTINGS
                 : trtEngineSettings;
 
-            // v2 (animejanai 3.3.0) had a single global default_preset for all default profiles; v3
-            // split it into per-profile quality/balanced/performance keys. Use default_preset as the
-            // fallback so a migrated conf keeps its Sharp selection. The per-profile keys (when
-            // present in a v3 conf) take precedence; default_preset is absent in v3 confs.
-            var legacyPreset = parser.GetValue("global", "default_preset", "standard");
-            bool IsSharp(string key) => parser.GetValue("global", key, legacyPreset).Trim()
-                .Equals("sharp", StringComparison.OrdinalIgnoreCase);
-            animeJaNaiConf.QualitySharp = IsSharp("quality_preset");
-            animeJaNaiConf.BalancedSharp = IsSharp("balanced_preset");
-            animeJaNaiConf.PerformanceSharp = IsSharp("performance_preset");
-
-            foreach (var section in parser.Sections)
+            foreach(var section in parser.Sections)
             {
-                if (section.SectionName != "global")
-                {
-                    var currentSlotNumber = Regex.Match(section.SectionName, @"slot_(\d+)").Groups[1].Value;
-
-                    var chains = new Dictionary<string, UpscaleChain>();
-                    var models = new Dictionary<string, Dictionary<string, UpscaleModel>>();
-
-                    foreach (var key in section.Keys)
-                    {
-                        var matchCurrentChainNumber = Regex.Match(key.Name, @"chain_(\d+)_");
-
-                        if (matchCurrentChainNumber.Success)
-                        {
-                            var currentChainNumber = matchCurrentChainNumber.Groups[1].Value;
-
-                            chains[currentChainNumber] = new UpscaleChain(autoSave)
-                            {
-                                Vm = this,
-                                ChainNumber = currentChainNumber,
-                                MinResolution = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_min_resolution"),
-                                MaxResolution = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_max_resolution"),
-                                MinFps = NumericOr(parser, section.SectionName, $"chain_{currentChainNumber}_min_fps"),
-                                MaxFps = NumericOr(parser, section.SectionName, $"chain_{currentChainNumber}_max_fps"),
-                                EnableRife = ParseBool(parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_rife")),
-                                //RifeModel = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_rife_model"),
-                                RifeEnsemble = ParseBool(parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_rife_ensemble")),
-                                RifeBeforeUpscale = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_rife_before_upscale") is { } rbu ? ParseBool(rbu) : true,
-                            };
-
-                            if (int.TryParse(parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_rife_factor_numerator"), ENGLISH_CULTURE, out var numerator))
-                            {
-                                chains[currentChainNumber].RifeFactorNumerator = numerator;
-                            }
-
-                            if (int.TryParse(parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_rife_factor_denominator"), ENGLISH_CULTURE, out var denominator))
-                            {
-                                chains[currentChainNumber].RifeFactorDenominator = denominator;
-                            }
-
-                            if (decimal.TryParse(parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_rife_scene_detect_threshold"), ENGLISH_CULTURE, out var scene_detect_threshold))
-                            {
-                                chains[currentChainNumber].RifeSceneDetectThreshold = scene_detect_threshold;
-                            }
-
-                            var rifeModel = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_rife_model");
-
-                            if (rifeModel != null)
-                            {
-                                chains[currentChainNumber].RifeModel = RifeValueToLabel(rifeModel);
-                            }
-
-                            var matchCurrentModelNumber = Regex.Match(key.Name, @"_model_(\d+)_");
-
-                            if (matchCurrentModelNumber.Success)
-                            {
-                                var currentModelNumber = matchCurrentModelNumber.Groups[1].Value;
-
-                                if (!models.ContainsKey(currentChainNumber))
-                                {
-                                    models[currentChainNumber] = [];
-                                }
-
-                                if (models[currentChainNumber].ContainsKey(currentModelNumber))
-                                {
-                                    continue;
-                                }
-
-                                models[currentChainNumber][currentModelNumber] = new UpscaleModel(autoSave)
-                                {
-                                    Vm = this,
-                                    AllModels = GetAllModels(),
-                                    ModelNumber = currentModelNumber,
-                                    Name = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_model_{currentModelNumber}_name", "0x0"),
-                                    ResizeFactorBeforeUpscale = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_model_{currentModelNumber}_resize_factor_before_upscale", 100.ToString()),
-                                    ResizeHeightBeforeUpscale = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_model_{currentModelNumber}_resize_height_before_upscale", 0.ToString()),
-                                    Frames = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_model_{currentModelNumber}_frames", 0.ToString()),
-                                    TemporalSceneThreshold = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_model_{currentModelNumber}_temporal_scene_threshold", UpscaleModel.DefaultTemporalSceneThreshold)
-                                };
-                            }
-                        }
-                    }
-
-                    foreach (var currentChainNumber in models.Keys)
-                    {
-                        chains[currentChainNumber].Models = new AvaloniaList<UpscaleModel>(models[currentChainNumber].Values.ToList());
-                    }
-
-                    foreach (var chain in chains.Values)
-                        chain.LoadPipeline(section.Keys.ToDictionary(k => k.Name, k => parser.GetValue(section.SectionName, k.Name)), animeJaNaiConf.SelectedBackend.ToString(), animeJaNaiConf.RifeEngine);
-
-                    slots[currentSlotNumber] = new UpscaleSlot(autoSave)
-                    {
-                        Vm = this,
-                        SlotNumber = currentSlotNumber,
-                        ProfileName = parser.GetValue(section.SectionName, "profile_name", "New Profile"),
-                        HdrStageControlled = ParseBool(parser.GetValue(section.SectionName,"hdr_stage_controlled","no"))||chains.Values.Any(c=>c.Stages.Any(s=>s.Kind=="hdr")),
-                        Chains = new AvaloniaList<UpscaleChain>(chains.Values.ToList())
-                    };
-                }
+                var match=Regex.Match(section.SectionName,@"^slot_([1-9][0-9]*)$");if(!match.Success)continue;
+                string number=match.Groups[1].Value;
+                var chains=ReadChains(parser,section.SectionName,autoSave,OnMac?animeJaNaiConf.AppleEngine:animeJaNaiConf.SelectedBackend.ToString(),animeJaNaiConf.RifeEngine);
+                slots[number]=new UpscaleSlot(autoSave){Vm=this,SlotNumber=number,MpvProfileName=$"upscale-on-{number}",
+                    ProfileName=parser.GetValue(section.SectionName,"profile_name","New Profile"),
+                    HdrStageControlled=ParseBool(parser.GetValue(section.SectionName,"hdr_stage_controlled","no"))||chains.Any(c=>c.Stages.Any(s=>s.Kind=="hdr")),Chains=chains};
             }
 
             animeJaNaiConf.UpscaleSlots = new AvaloniaList<UpscaleSlot>(slots.Values);
+            if(HdrSettings!=null&&OptionalSdks!=null)foreach(var profile in animeJaNaiConf.UpscaleSlots)MigrateLegacyHdr(profile);
 
             return animeJaNaiConf;
+        }
+
+        private void MigrateLegacyHdr(UpscaleSlot profile)
+        {
+            if(profile.HdrStageControlled||profile.Chains.Any(c=>!c.PipelineEditable))return;
+            profile.HdrStageControlled=true;
+            if(HdrSettings.ConversionInProfiles||!HdrSettings.HdrConversion||profile.ProfileName=="New Profile"||profile.Chains.Count==0)return;
+            bool nvidia=HdrSettings.Backend=="rtx"||HdrSettings.Backend=="auto"&&_expectedBank.Contains("nvidia");
+            string method=nvidia&&(OnWindows||OnLinux&&OptionalSdks.TrueHdrReady)?"nvidia-truehdr":"mpv";
+            string runtime=method=="mpv"?"gpu-next":OnWindows?"rtx-video":"cuda";
+            var options=new Dictionary<string,string>{{"contrast",(HdrSettings.RtxContrast??100).ToString(ENGLISH_CULTURE)},
+                {"saturation",(HdrSettings.RtxSaturation??100).ToString(ENGLISH_CULTURE)},{"middle_gray",(HdrSettings.RtxMiddleGray??50).ToString(ENGLISH_CULTURE)}};
+            if(method!="mpv")options["peak"]=Math.Clamp(HdrSettings.Display.Peak??1000,400,2000).ToString(ENGLISH_CULTURE);
+            if(method=="mpv") {
+                options["mpv_truehdr_look"]=HdrSettings.MpvTrueHdrLook?"yes":"no";
+                options["paper_white"]=(HdrSettings.SdrWhite??203).ToString(ENGLISH_CULTURE);
+                options["highlights"]=(HdrSettings.HighlightsMpv??50).ToString(ENGLISH_CULTURE);
+                options["vibrance"]=(HdrSettings.VibranceMpv??15).ToString(ENGLISH_CULTURE);
+            } else if(OnLinux)options["sdk_root"]=OptionalSdks.TrueHdrRoot;
+            profile.Chains[0].Stages.Add(new InterpolationStage(profile.Chains[0],new("migrated-hdr","hdr",method,runtime,true,"",new(1,1),"quality",options)));
+        }
+
+        private AvaloniaList<UpscaleChain> ReadChains(ConfigParser parser,string section,bool autoSave,string backend,string policy)
+        {
+            var values=parser.Sections.First(s=>s.SectionName==section).Keys.ToDictionary(k=>k.Name,k=>parser.GetValue(section,k.Name));
+            var numbers=values.Keys.Select(k=>Regex.Match(k,@"^chain_([1-9][0-9]*)_")).Where(m=>m.Success)
+                .Select(m=>int.Parse(m.Groups[1].Value)).Distinct().Order();
+            var chains=new AvaloniaList<UpscaleChain>();
+            foreach(int n in numbers)
+            {
+                var chain=new UpscaleChain(autoSave){Vm=this,ChainNumber=n.ToString(),
+                    MinResolution=parser.GetValue(section,$"chain_{n}_min_resolution","0x0"),
+                    MaxResolution=parser.GetValue(section,$"chain_{n}_max_resolution","0x0"),
+                    MinFps=NumericOr(parser,section,$"chain_{n}_min_fps"),MaxFps=NumericOr(parser,section,$"chain_{n}_max_fps")};
+                chain.LoadPipeline(values,backend,policy);chains.Add(chain);
+            }
+            return chains;
         }
 
         public void ReadAnimeJaNaiConfToCurrentSlot(string fullPath, bool autoSave = false)
@@ -1214,110 +960,11 @@ chain_2_rife=no";
         public void ReadAnimeJaNaiConfToCurrentSlot(ConfigParser parser, bool autoSave = false)
         {
             _profileReadDepth++;
-            using var reading = System.Reactive.Disposables.Disposable.Create(() => _profileReadDepth--);
-            var sectionKey = "slot";
-
-            foreach (var section in parser.Sections)
-            {
-                if (section.SectionName != sectionKey)
-                {
-                    return; // Invalid
-                }
-
-                var currentSlotNumber = Regex.Match(section.SectionName, @"slot_(\d+)").Groups[1].Value;
-
-                var chains = new Dictionary<string, UpscaleChain>();
-                var models = new Dictionary<string, Dictionary<string, UpscaleModel>>();
-
-                foreach (var key in section.Keys)
-                {
-                    var matchCurrentChainNumber = Regex.Match(key.Name, @"chain_(\d+)_");
-
-                    if (matchCurrentChainNumber.Success)
-                    {
-                        var currentChainNumber = matchCurrentChainNumber.Groups[1].Value;
-
-                        chains[currentChainNumber] = new UpscaleChain(autoSave)
-                        {
-                            Vm = this,
-                            ChainNumber = currentChainNumber,
-                            MinResolution = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_min_resolution"),
-                            MaxResolution = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_max_resolution"),
-                            MinFps = NumericOr(parser, section.SectionName, $"chain_{currentChainNumber}_min_fps"),
-                            MaxFps = NumericOr(parser, section.SectionName, $"chain_{currentChainNumber}_max_fps"),
-                            EnableRife = ParseBool(parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_rife")),
-                            RifeEnsemble = ParseBool(parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_rife_ensemble")),
-                            RifeBeforeUpscale = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_rife_before_upscale") is { } rbu ? ParseBool(rbu) : true,
-                        };
-
-                        if (int.TryParse(parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_rife_factor_numerator"), ENGLISH_CULTURE, out var numerator))
-                        {
-                            chains[currentChainNumber].RifeFactorNumerator = numerator;
-                        }
-
-                        if (int.TryParse(parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_rife_factor_denominator"), ENGLISH_CULTURE, out var denominator))
-                        {
-                            chains[currentChainNumber].RifeFactorDenominator = denominator;
-                        }
-
-                        if (decimal.TryParse(parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_rife_scene_detect_threshold"), ENGLISH_CULTURE, out var scene_detect_threshold))
-                        {
-                            chains[currentChainNumber].RifeSceneDetectThreshold = scene_detect_threshold;
-                        }
-
-                        var rifeModel = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_rife_model");
-
-                        if (rifeModel != null)
-                        {
-                            chains[currentChainNumber].RifeModel = RifeValueToLabel(rifeModel);
-                        }
-
-                        var matchCurrentModelNumber = Regex.Match(key.Name, @"_model_(\d+)_");
-
-                        if (matchCurrentModelNumber.Success)
-                        {
-                            var currentModelNumber = matchCurrentModelNumber.Groups[1].Value;
-
-                            if (!models.ContainsKey(currentChainNumber))
-                            {
-                                models[currentChainNumber] = [];
-                            }
-
-                            if (models[currentChainNumber].ContainsKey(currentModelNumber))
-                            {
-                                continue;
-                            }
-
-                            models[currentChainNumber][currentModelNumber] = new UpscaleModel(true)
-                            {
-                                Vm = this,
-                                AllModels = GetAllModels(),
-                                ModelNumber = currentModelNumber,
-                                Name = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_model_{currentModelNumber}_name", "0x0"),
-                                ResizeFactorBeforeUpscale = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_model_{currentModelNumber}_resize_factor_before_upscale", 100.ToString()),
-                                ResizeHeightBeforeUpscale = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_model_{currentModelNumber}_resize_height_before_upscale", 0.ToString()),
-                                Frames = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_model_{currentModelNumber}_frames", 0.ToString()),
-                                TemporalSceneThreshold = parser.GetValue(section.SectionName, $"chain_{currentChainNumber}_model_{currentModelNumber}_temporal_scene_threshold", UpscaleModel.DefaultTemporalSceneThreshold)
-                            };
-                        }
-                    }
-                }
-
-                foreach (var currentChainNumber in models.Keys)
-                {
-                    chains[currentChainNumber].Models = new AvaloniaList<UpscaleModel>(models[currentChainNumber].Values.ToList());
-                }
-
-                foreach (var chain in chains.Values)
-                    chain.LoadPipeline(section.Keys.ToDictionary(k => k.Name, k => parser.GetValue(section.SectionName, k.Name)), AnimeJaNaiConf.SelectedBackend.ToString(), AnimeJaNaiConf.RifeEngine);
-
-                CurrentSlot.Vm = this;
-                CurrentSlot.ProfileName = parser.GetValue(sectionKey, "profile_name", "New Profile");
-                CurrentSlot.HdrStageControlled = ParseBool(parser.GetValue(sectionKey,"hdr_stage_controlled","no"))||chains.Values.Any(c=>c.Stages.Any(s=>s.Kind=="hdr"));
-                CurrentSlot.Chains = new AvaloniaList<UpscaleChain>(chains.Values.ToList());
-            }
-            reading.Dispose();
-            if (autoSave) WriteAnimeJaNaiConf();
+            using var reading=System.Reactive.Disposables.Disposable.Create(()=>_profileReadDepth--);
+            if(parser.Sections.Count()!=1||parser.Sections.First().SectionName!="slot")throw new InvalidDataException("Expected a single exported profile section.");
+            var chains=ReadChains(parser,"slot",autoSave,OnMac?AnimeJaNaiConf.AppleEngine:AnimeJaNaiConf.SelectedBackend.ToString(),AnimeJaNaiConf.RifeEngine);
+            CurrentSlot.ProfileName=parser.GetValue("slot","profile_name","New Profile");CurrentSlot.HdrStageControlled=ParseBool(parser.GetValue("slot","hdr_stage_controlled","no"))||chains.Any(c=>c.Stages.Any(s=>s.Kind=="hdr"));CurrentSlot.Chains=chains;MigrateLegacyHdr(CurrentSlot);
+            reading.Dispose();if(autoSave)WriteAnimeJaNaiConf();
         }
 
         static bool ParseBool(string value)
@@ -1353,6 +1000,8 @@ chain_2_rife=no";
                         HdrSettings.NotifyPlayer();
                     }
                     else File.WriteAllText(fullPath, text);
+                    if(Path.GetFullPath(fullPath)==Path.GetFullPath(AnimeJaNaiConfPath)&&AnimeJaNaiConf.UpscaleSlots.All(p=>p.HdrStageControlled&&p.Chains.All(c=>c.PipelineEditable)))
+                        HdrSettings.RetireLegacyConversion();
                 }
                 finally { if (File.Exists(temp)) File.Delete(temp); }
             }
@@ -1385,8 +1034,7 @@ chain_2_rife=no";
             parser.SetValue("global", "logging", conf.EnableLogging ? "yes" : "no");
             parser.SetValue("global", "rife_engine", conf.RifeEngine);
             parser.SetValue("global", "rife_drawings", conf.RifeDrawings ? "yes" : "no");
-            // Write-minimal: only persist default_slot when the user picked one (absent => the vf
-            // line's baked-in Balanced slot applies).
+            // Startup is Off until a custom profile is explicitly selected.
             if (conf.DefaultSlot is int defaultSlot)
             {
                 parser.SetValue("global", "default_slot", defaultSlot.ToString(ENGLISH_CULTURE));
@@ -1407,20 +1055,6 @@ chain_2_rife=no";
             {
                 parser.SetValue("global", "trt_engine_settings", conf.TrtEngineSettings);
             }
-            // Write-minimal: only persist a profile's preset when sharp (absent => standard).
-            if (conf.QualitySharp)
-            {
-                parser.SetValue("global", "quality_preset", "sharp");
-            }
-            if (conf.BalancedSharp)
-            {
-                parser.SetValue("global", "balanced_preset", "sharp");
-            }
-            if (conf.PerformanceSharp)
-            {
-                parser.SetValue("global", "performance_preset", "sharp");
-            }
-
             foreach (var profile in conf.UpscaleSlots)
             {
                 var section = $"slot_{profile.SlotNumber}";
@@ -1434,27 +1068,7 @@ chain_2_rife=no";
                     parser.SetValue(section, $"chain_{chain.ChainNumber}_min_fps", string.Create(ENGLISH_CULTURE, $"{chain.MinFps}"));
                     parser.SetValue(section, $"chain_{chain.ChainNumber}_max_fps", string.Create(ENGLISH_CULTURE, $"{chain.MaxFps}"));
 
-                    if (chain.OrderedPipeline) { chain.WritePipeline(parser, section); continue; }
-
-                    foreach (var model in chain.Models)
-                    {
-                        parser.SetValue(section, $"chain_{chain.ChainNumber}_model_{model.ModelNumber}_resize_height_before_upscale", string.Create(ENGLISH_CULTURE, $"{model.ResizeHeightBeforeUpscale}"));
-                        parser.SetValue(section, $"chain_{chain.ChainNumber}_model_{model.ModelNumber}_resize_factor_before_upscale", string.Create(ENGLISH_CULTURE, $"{model.ResizeFactorBeforeUpscale}"));
-                        parser.SetValue(section, $"chain_{chain.ChainNumber}_model_{model.ModelNumber}_name", string.Create(ENGLISH_CULTURE, $"{model.Name}"));
-                        WriteTemporalKeys(parser, section, chain, model);
-                    }
-
-                    parser.SetValue(section, $"chain_{chain.ChainNumber}_rife", chain.EnableRife ? "yes" : "no");
-                    chain.RifeModel ??= chain.RifeModelList.FirstOrDefault("");
-
-                    var rifeModel = RifeLabelToValue(chain.RifeModel);
-
-                    parser.SetValue(section, $"chain_{chain.ChainNumber}_rife_model", rifeModel);
-                    parser.SetValue(section, $"chain_{chain.ChainNumber}_rife_factor_numerator", string.Create(ENGLISH_CULTURE, $"{chain.RifeFactorNumerator ?? 1}"));
-                    parser.SetValue(section, $"chain_{chain.ChainNumber}_rife_factor_denominator", string.Create(ENGLISH_CULTURE, $"{chain.RifeFactorDenominator ?? 1}"));
-                    parser.SetValue(section, $"chain_{chain.ChainNumber}_rife_scene_detect_threshold", string.Create(ENGLISH_CULTURE, $"{chain.RifeSceneDetectThreshold ?? 0.015M}"));
-                    parser.SetValue(section, $"chain_{chain.ChainNumber}_rife_ensemble", chain.RifeEnsemble ? "yes" : "no");
-                    parser.SetValue(section, $"chain_{chain.ChainNumber}_rife_before_upscale", chain.RifeBeforeUpscale ? "yes" : "no");
+                    chain.WritePipeline(parser, section);
                 }
             }
 
@@ -1465,16 +1079,6 @@ chain_2_rife=no";
         {
             var parser = ParsedAnimeJaNaiProfileConf(CurrentSlot);
             parser.Save(fullPath);
-        }
-
-        // Temporal model keys are optional: written only when they carry
-        // something, so confs without temporal models stay unchanged.
-        private static void WriteTemporalKeys(ConfigParser parser, string section, UpscaleChain chain, UpscaleModel model)
-        {
-            if (model.Frames != 0.ToString())
-                parser.SetValue(section, $"chain_{chain.ChainNumber}_model_{model.ModelNumber}_frames", string.Create(ENGLISH_CULTURE, $"{model.Frames}"));
-            if (model.IsTemporal || model.TemporalSceneThreshold != UpscaleModel.DefaultTemporalSceneThreshold)
-                parser.SetValue(section, $"chain_{chain.ChainNumber}_model_{model.ModelNumber}_temporal_scene_threshold", string.Create(ENGLISH_CULTURE, $"{model.TemporalSceneThreshold}"));
         }
 
         public ConfigParser ParsedAnimeJaNaiProfileConf(UpscaleSlot slot)
@@ -1492,23 +1096,7 @@ chain_2_rife=no";
                 parser.SetValue(section, $"chain_{chain.ChainNumber}_min_fps", string.Create(ENGLISH_CULTURE, $"{chain.MinFps}"));
                 parser.SetValue(section, $"chain_{chain.ChainNumber}_max_fps", string.Create(ENGLISH_CULTURE, $"{chain.MaxFps}"));
 
-                if (chain.OrderedPipeline) { chain.WritePipeline(parser, section); continue; }
-
-                foreach (var model in chain.Models)
-                {
-                    parser.SetValue(section, $"chain_{chain.ChainNumber}_model_{model.ModelNumber}_resize_height_before_upscale", string.Create(ENGLISH_CULTURE, $"{model.ResizeHeightBeforeUpscale}"));
-                    parser.SetValue(section, $"chain_{chain.ChainNumber}_model_{model.ModelNumber}_resize_factor_before_upscale", string.Create(ENGLISH_CULTURE, $"{model.ResizeFactorBeforeUpscale}"));
-                    parser.SetValue(section, $"chain_{chain.ChainNumber}_model_{model.ModelNumber}_name", string.Create(ENGLISH_CULTURE, $"{model.Name}"));
-                    WriteTemporalKeys(parser, section, chain, model);
-                }
-
-                parser.SetValue(section, $"chain_{chain.ChainNumber}_rife", chain.EnableRife ? "yes" : "no");
-                parser.SetValue(section, $"chain_{chain.ChainNumber}_rife_factor_numerator", string.Create(ENGLISH_CULTURE, $"{chain.RifeFactorNumerator ?? 0}"));
-                parser.SetValue(section, $"chain_{chain.ChainNumber}_rife_factor_denominator", string.Create(ENGLISH_CULTURE, $"{chain.RifeFactorDenominator ?? 1}"));
-                parser.SetValue(section, $"chain_{chain.ChainNumber}_rife_model", string.Create(ENGLISH_CULTURE, $"{RifeLabelToValue(chain.RifeModel)}"));
-                parser.SetValue(section, $"chain_{chain.ChainNumber}_rife_ensemble", chain.RifeEnsemble ? "yes" : "no");
-                parser.SetValue(section, $"chain_{chain.ChainNumber}_rife_scene_detect_threshold", string.Create(ENGLISH_CULTURE, $"{chain.RifeSceneDetectThreshold ?? 0.015M}"));
-                parser.SetValue(section, $"chain_{chain.ChainNumber}_rife_before_upscale", chain.RifeBeforeUpscale ? "yes" : "no");
+                chain.WritePipeline(parser, section);
             }
 
             return parser;
@@ -1619,9 +1207,9 @@ chain_2_rife=no";
             switch (mpvProfile)
             {
                 case "upscale-off": return 0;
-                case "upscale-on-quality": return 1001;
-                case "upscale-on-balanced": return 1002;
-                case "upscale-on-performance": return 1003;
+
+
+
             }
             var m = Regex.Match(mpvProfile, @"^upscale-on-(\d+)$");
             return m.Success ? int.Parse(m.Groups[1].Value, ENGLISH_CULTURE) : (int?)null;
@@ -1633,9 +1221,9 @@ chain_2_rife=no";
             {
                 case null: return null;
                 case 0: return "upscale-off";
-                case 1001: return "upscale-on-quality";
-                case 1002: return "upscale-on-balanced";
-                case 1003: return "upscale-on-performance";
+
+
+
             }
             return slot.Value is >= 1 and <= 9 ? $"upscale-on-{slot.Value}" : null;
         }
@@ -1645,8 +1233,6 @@ chain_2_rife=no";
         private void WriteDefaultProfile(bool upscaleOff = false)
         {
             if (LinuxFeatures && !(AnimeJaNaiConf.OnnxRuntimeSelected ? OnnxRuntimeSelectable : AnimeJaNaiConf.VulkanSelected ? VulkanSelectable : TrtSelectable) && !upscaleOff) { BackendNotice = "The selected inference backend is unavailable. Normal playback remains available."; return; }
-            if (LinuxFeatures && AnimeJaNaiConf.VulkanSelected && !upscaleOff && ShowDefaultProfiles)
-            { BackendNotice = "Vulkan uses custom Linux slots 1–4; built-in ONNX profiles are unavailable."; return; }
             var profile = upscaleOff ? "upscale-off" : CurrentSlot.MpvProfileName;
             AnimeJaNaiConf.DefaultSlot = MpvProfileToSlot(profile);
             WriteAnimeJaNaiConf();
@@ -1656,14 +1242,6 @@ chain_2_rife=no";
         {
             if (SelectedMpvProfile == null || SelectedMpvProfile == "upscale-off")
             {
-                return;
-            }
-
-            var defaultSlot = DefaultUpscaleSlots.Where(x => x.MpvProfileName == SelectedMpvProfile).FirstOrDefault();
-
-            if (defaultSlot != null)
-            {
-                HandleShowDefaultProfile(defaultSlot.SlotNumber);
                 return;
             }
 
@@ -1718,9 +1296,6 @@ chain_2_rife=no";
                 // Separate subscription: WhenAnyValue's tuple overload doesn't extend to this many
                 // properties in one call.
                 this.WhenAnyValue(
-                    x => x.QualitySharp,
-                    x => x.BalancedSharp,
-                    x => x.PerformanceSharp,
                     x => x.GpuSubtitles,
                     x => x.RifeEngine,
                     x => x.AutoDisplayRefresh).Subscribe(x =>
@@ -1814,29 +1389,7 @@ chain_2_rife=no";
         // Per-profile Standard vs Sharp model selection for the three built-in default profiles.
         // Persisted as [global] quality_preset / balanced_preset / performance_preset and honored at
         // playback by animejanai_config.py (slots 1001/1002/1003). false => standard, true => sharp.
-        private bool _qualitySharp = false;
-        [DataMember]
-        public bool QualitySharp
-        {
-            get => _qualitySharp;
-            set => this.RaiseAndSetIfChanged(ref _qualitySharp, value);
-        }
 
-        private bool _balancedSharp = false;
-        [DataMember]
-        public bool BalancedSharp
-        {
-            get => _balancedSharp;
-            set => this.RaiseAndSetIfChanged(ref _balancedSharp, value);
-        }
-
-        private bool _performanceSharp = false;
-        [DataMember]
-        public bool PerformanceSharp
-        {
-            get => _performanceSharp;
-            set => this.RaiseAndSetIfChanged(ref _performanceSharp, value);
-        }
 
         private string _trtEngineSettings = "--builderOptimizationLevel=5 --optShapes=input:%video_resolution% --skipInference";
         [DataMember]
@@ -2293,8 +1846,7 @@ chain_2_rife=no";
                 sub?.Dispose();
                 sub = Vm.WhenAnyValue(
                     x => x.SelectedSlotNumber,
-                    x => x.ShowCustomProfiles,
-                    x => x.ShowDefaultProfiles
+                    x => x.ShowCustomProfiles
                     ).Subscribe(x =>
                 {
                     this.RaisePropertyChanged(nameof(ActiveSlot));
@@ -2327,11 +1879,10 @@ chain_2_rife=no";
             set => this.RaiseAndSetIfChanged(ref _slotNumber, value);
         }
 
-        [DataMember] public bool HdrStageControlled { get; set; }
+        [DataMember] public bool HdrStageControlled { get; set; } = true;
 
-        public bool ActiveSlot => ((Vm?.ShowCustomProfiles ?? false) && IsCustomSlot || (Vm?.ShowDefaultProfiles ?? false) && !IsCustomSlot) && SlotNumber == Vm?.SelectedSlotNumber;
+        public bool ActiveSlot => (Vm?.ShowCustomProfiles ?? false) && SlotNumber == Vm?.SelectedSlotNumber;
 
-        public bool IsCustomSlot => MpvProfileName?.Any(char.IsDigit) ?? false;
 
         public string SlotIcon => $"Number{SlotNumber}Circle";
 
@@ -2381,29 +1932,8 @@ chain_2_rife=no";
 
             if (autoSave)
             {
-                var g1 = this.WhenAnyValue(
-                    x => x.ChainNumber,
-                    x => x.MinResolution,
-                    x => x.MaxResolution,
-                    x => x.MinFps,
-                    x => x.MaxFps,
-                    x => x.Models.Count,
-                    x => x.EnableRife
-                );
-
-                var g2 = this.WhenAnyValue(
-                    x => x.RifeFactorNumerator,
-                    x => x.RifeFactorDenominator,
-                    x => x.RifeModel,
-                    x => x.RifeSceneDetectThreshold,
-                    x => x.RifeEnsemble,
-                    x => x.RifeBeforeUpscale
-                );
-
-                g1.CombineLatest(g2).Subscribe(x =>
-                {
-                    Vm?.WriteAnimeJaNaiConf();
-                });
+                this.WhenAnyValue(x=>x.ChainNumber,x=>x.MinResolution,x=>x.MaxResolution,x=>x.MinFps,x=>x.MaxFps)
+                    .Subscribe(_=>Vm?.WriteAnimeJaNaiConf());
             }
         }
 
@@ -2451,243 +1981,6 @@ chain_2_rife=no";
             set => this.RaiseAndSetIfChanged(ref _maxFps, value);
         }
 
-        private AvaloniaList<UpscaleModel> _models = [];
-        [DataMember]
-        public AvaloniaList<UpscaleModel> Models
-        {
-            get => _models;
-            set => this.RaiseAndSetIfChanged(ref _models, value);
-        }
-
-        private bool _enableRife = false;
-        [DataMember]
-        public bool EnableRife
-        {
-            get => _enableRife;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _enableRife, value);
-                this.RaisePropertyChanged(nameof(RifeToggleEnabled));
-            }
-        }
-
-        // The models of the macOS application have no ensemble variant.
-        public bool RifeEnsembleChoice => !MainWindowViewModel.OnMac;
-
-        // Enabling RIFE needs the models; disabling it must always be possible.
-        // So the toggle locks only in the unchecked-and-not-installed state.
-        public bool RifeToggleEnabled =>
-            EnableRife || !(MainWindowViewModel.Instance?.RifeMissing ?? false);
-
-        private List<string> _rifeModelList = new(MainWindowViewModel.RifeModels);
-
-        public List<string> RifeModelList
-        {
-            get => _rifeModelList;
-            set => this.RaiseAndSetIfChanged(ref _rifeModelList, value);
-        }
-
-        private string _rifeModel = MainWindowViewModel.RifeModels.FirstOrDefault("");
-        [DataMember]
-        public string RifeModel
-        {
-            get => _rifeModel;
-            set => this.RaiseAndSetIfChanged(ref _rifeModel, value);
-        }
-
-        private bool _rifeEnsemble = false;
-        [DataMember]
-        public bool RifeEnsemble
-        {
-            get => _rifeEnsemble;
-            set => this.RaiseAndSetIfChanged(ref _rifeEnsemble, value);
-        }
-
-        private int? _rifeFactorNumerator = 2;
-        [DataMember]
-        public int? RifeFactorNumerator
-        {
-            get => _rifeFactorNumerator ?? 2;
-            set => this.RaiseAndSetIfChanged(ref _rifeFactorNumerator, value ?? 2);
-        }
-
-        private int? _rifeFactorDenominator = 1;
-        [DataMember]
-        public int? RifeFactorDenominator
-        {
-            get => _rifeFactorDenominator ?? 1;
-            set => this.RaiseAndSetIfChanged(ref _rifeFactorDenominator, value ?? 1);
-        }
-
-        private decimal? _rifeSceneDetectThreshold = 0.150M;
-        [DataMember]
-        public decimal? RifeSceneDetectThreshold
-        {
-            get => _rifeSceneDetectThreshold;
-            set => this.RaiseAndSetIfChanged(ref _rifeSceneDetectThreshold, value ?? 0.150M);
-        }
-
-        // Interpolate at the source resolution, then upscale (faster); default
-        // on. False = interpolate the upscaled frames (the old order).
-        private bool _rifeBeforeUpscale = true;
-        [DataMember]
-        public bool RifeBeforeUpscale
-        {
-            get => _rifeBeforeUpscale;
-            set => this.RaiseAndSetIfChanged(ref _rifeBeforeUpscale, value);
-        }
-
-        public void AddModel()
-        {
-            Models.Add(new UpscaleModel(AutoSave)
-            {
-                Vm = Vm,
-                AllModels = Vm?.GetAllModels(),
-            });
-
-            UpdateModelHeaders();
-        }
-
-        public void DeleteModel(UpscaleModel model)
-        {
-            try
-            {
-                Models.Remove(model);
-            }
-            catch (ArgumentOutOfRangeException)
-            {
-
-            }
-
-            UpdateModelHeaders();
-        }
-
-        public void UpdateModelHeaders()
-        {
-            for (var i = 0; i < Models.Count; i++)
-            {
-                Models[i].ModelNumber = (i + 1).ToString();
-            }
-        }
-
-    }
-
-    [DataContract]
-    public class UpscaleModel : ReactiveObject
-    {
-        public UpscaleModel(bool autoSave = false)
-        {
-            if (autoSave)
-            {
-                this.WhenAnyValue(
-                    x => x.ModelNumber,
-                    x => x.ResizeHeightBeforeUpscale,
-                    x => x.ResizeFactorBeforeUpscale,
-                    x => x.Name,
-                    x => x.Frames,
-                    x => x.TemporalSceneThreshold
-                ).Subscribe(x =>
-                {
-                    Vm?.WriteAnimeJaNaiConf();
-                });
-            }
-        }
-
-        public MainWindowViewModel? Vm { get; set; }
-
-        private AvaloniaList<string> _allModels = [];
-        [DataMember]
-        public AvaloniaList<string> AllModels
-        {
-            get => _allModels;
-            set => this.RaiseAndSetIfChanged(ref _allModels, value);
-        }
-
-        private string _modelNumber = string.Empty;
-        [DataMember]
-        public string ModelNumber
-        {
-            get => _modelNumber;
-            set => this.RaiseAndSetIfChanged(ref _modelNumber, value);
-        }
-
-        private string _resizeHeightBeforeUpscale = 0.ToString();
-        [DataMember]
-        public string ResizeHeightBeforeUpscale
-        {
-            get => _resizeHeightBeforeUpscale;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _resizeHeightBeforeUpscale, value);
-                this.RaisePropertyChanged(nameof(ResizeFactorBeforeUpscaleIsEnabled));
-            }
-        }
-
-        private string _resizeFactorBeforeUpscale = 100.ToString();
-        [DataMember]
-        public string ResizeFactorBeforeUpscale
-        {
-            get => _resizeFactorBeforeUpscale;
-            set => this.RaiseAndSetIfChanged(ref _resizeFactorBeforeUpscale, value);
-        }
-
-        public bool ResizeFactorBeforeUpscaleIsEnabled => ResizeHeightBeforeUpscale == 0.ToString();
-
-        private string _name = string.Empty;
-        [DataMember]
-        public string Name
-        {
-            get => _name;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _name, value);
-                RaiseTemporalChanged();
-            }
-        }
-
-        // Temporal (multi-frame) models: the engine detects the frame count
-        // from the onnx input; Frames overrides it when nonzero.
-        public const string DefaultTemporalSceneThreshold = "0.15";
-
-        private string _frames = 0.ToString();
-        [DataMember]
-        public string Frames
-        {
-            get => _frames;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _frames, value);
-                RaiseTemporalChanged();
-            }
-        }
-
-        private string _temporalSceneThreshold = DefaultTemporalSceneThreshold;
-        [DataMember]
-        public string TemporalSceneThreshold
-        {
-            get => _temporalSceneThreshold;
-            set => this.RaiseAndSetIfChanged(ref _temporalSceneThreshold, value);
-        }
-
-        public int TemporalFrames
-        {
-            get
-            {
-                if (int.TryParse(Frames, NumberStyles.Integer, CultureInfo.InvariantCulture, out var frames) && frames > 0)
-                    return frames;
-                if (Vm == null || string.IsNullOrEmpty(Name))
-                    return 1;
-                return OnnxInputShape.TemporalFrames(Path.Combine(Vm.OnnxPath, Name + ".onnx"));
-            }
-        }
-
-        public bool IsTemporal => TemporalFrames > 1;
-
-        private void RaiseTemporalChanged()
-        {
-            this.RaisePropertyChanged(nameof(TemporalFrames));
-            this.RaisePropertyChanged(nameof(IsTemporal));
-        }
     }
 
     public enum Backend

@@ -27,7 +27,7 @@ internal static class IniPreservingSave
             result.AddRange(remaining.Values); remaining.Clear();
         }
         string[] globals = ["config_version", "backend", "backend_auto_fallback", "logging", "default_slot",
-            "sub_render_mode", "display_rate_match", "trt_engine_settings", "quality_preset", "balanced_preset", "performance_preset"];
+            "sub_render_mode", "display_rate_match", "trt_engine_settings", "quality_preset", "balanced_preset", "performance_preset", "default_preset"];
         foreach (string line in original.Replace("\r\n", "\n").TrimEnd('\n').Split('\n'))
         {
             var heading = Regex.Match(line, @"^\s*\[([^]]+)\]");
