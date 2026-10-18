@@ -20,6 +20,8 @@
   <ItemGroup>
     <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
+    <!-- Source of the TrueHDR bridge (libaji_rtx.so), built on the user's computer against the imported SDK. -->
+    <EmbeddedResource Include="Native\aji_rtx_vfx.cpp" LogicalName="aji_rtx_vfx.cpp" />
   </ItemGroup>
 
   <ItemGroup>

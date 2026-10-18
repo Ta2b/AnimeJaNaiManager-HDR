@@ -64,7 +64,9 @@ namespace AnimeJaNaiConfEditor.ViewModels
         // Settings → HDR conversion: TrueHDR is offered when the player can run it here.
         public bool TrueHdrSelectable => OnWindows ? RtxHdrSelectable : OptionalSdks?.TrueHdrReady == true;
         public bool TrueHdrSdkMissing => OnLinux && OptionalSdks is { } sdks && !OptionalSdkViewModel.HasTrueHdrSdk(sdks.TrueHdrRoot);
-        public void RefreshTrueHdrChoice() { foreach (var name in new[] { nameof(TrueHdrSelectable), nameof(TrueHdrSdkMissing) }) this.RaisePropertyChanged(name); }
+        // The SDK or the bridge built from it is missing: both are set up on the Engines page.
+        public bool TrueHdrSetupNeeded => TrueHdrSdkMissing || OnLinux && OptionalSdks is { BridgeInstalled: false };
+        public void RefreshTrueHdrChoice() { foreach (var name in new[] { nameof(TrueHdrSelectable), nameof(TrueHdrSdkMissing), nameof(TrueHdrSetupNeeded) }) this.RaisePropertyChanged(name); }
         public async void InstallRecommendedComponents() => await ComponentManager.InstallMissingPreselectedAsync();
         public void ReturnToProfiles() => NavigateProfiles();
         private void RefreshOptionalSdkStages()

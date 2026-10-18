@@ -39,6 +39,14 @@ public sealed class TrueHdrSdkStore
         if(r.Version!=1)throw new InvalidDataException("Newer TrueHDR installation format; update the Manager.");
         return r;
     }
+    // Include folders of the imported Core and TrueHDR feature, when both kept their headers
+    // (imports made before this Manager version did not).
+    public (string Core,string Feature)? HeaderDirectories()
+    {
+        var r=ReadRegistry();if(r.Core==null||r.Feature==null)return null;
+        string core=Path.Combine(ComponentRoot(r.Core),"include"),feature=Path.Combine(ComponentRoot(r.Feature),"include");
+        return File.Exists(Path.Combine(core,"nvVideoEffects.h"))&&File.Exists(Path.Combine(core,"nvCVImage.h"))&&File.Exists(Path.Combine(feature,"nvVFXTrueHDR.h"))?(core,feature):null;
+    }
     public InstalledTrueHdr Read()
     {
         var r=ReadRegistry();if(r.Core!=null)Validate(r.Core,true);if(r.Feature!=null)Validate(r.Feature,false);
@@ -119,7 +127,7 @@ public sealed class TrueHdrSdkStore
                 string kind=alias.Destination.Split('/')[0];records[kind].Add(new(alias.Destination[(kind.Length+1)..],0,"",target[(kind.Length+1)..]));
             }
             // Feature archives may put their license at the archive root.
-            if(records["feature"].Any(f=>f.Path.StartsWith("lib/",StringComparison.Ordinal))&&records["core"].All(f=>f.Path.StartsWith("share/",StringComparison.Ordinal))) {
+            if(records["feature"].Any(f=>f.Path.StartsWith("lib/",StringComparison.Ordinal))&&records["core"].All(f=>f.Path.StartsWith("share/",StringComparison.Ordinal)||f.Path.StartsWith("include/",StringComparison.Ordinal))) {
                 foreach(var f in records["core"]) {string from=Path.Combine(staging,"core",f.Path),to=Path.Combine(staging,"feature",f.Path);Directory.CreateDirectory(Path.GetDirectoryName(to)!);File.Move(from,to);records["feature"].Add(f);}records["core"].Clear();
             }
             if(records.All(kv=>kv.Value.Count==0))throw new InvalidDataException("Archive does not contain the Linux Maxine Core or TrueHDR feature libraries.");
@@ -181,6 +189,12 @@ public sealed class TrueHdrSdkStore
             if(name.StartsWith("libnvVFXTrueHDR.so",StringComparison.Ordinal)||name.StartsWith("libnvidia-ngx-truehdr.so",StringComparison.Ordinal))return "feature/lib/"+name;
             if((source=="lib/"+name||source.EndsWith("/VideoFX/lib/"+name,StringComparison.Ordinal)||source=="VideoFX/lib/"+name)&&(name.StartsWith("libNVCVImage.so",StringComparison.Ordinal)||name.StartsWith("libVideoFX.so",StringComparison.Ordinal)||name.StartsWith("libVideoFXLocal.so",StringComparison.Ordinal)||name.StartsWith("libnvngxruntime.so",StringComparison.Ordinal)))return "core/lib/"+name;
             foreach(string kind in new[]{"cuda","tensorrt"})if(source=="external/"+kind+"/lib/"+name||source.EndsWith("/external/"+kind+"/lib/"+name,StringComparison.Ordinal))return "core/external/"+kind+"/lib/"+name;
+        }
+        // Headers are kept so the TrueHDR bridge can be built on this computer.
+        // Only the SDK's own include folders: VideoFX/include and the TrueHDR feature's include.
+        if(name.EndsWith(".h",StringComparison.Ordinal)&&Regex.IsMatch(name,"^[A-Za-z0-9_.-]+$")) {
+            if(Regex.IsMatch(source,@"(^|/)nvvfxtruehdr/include/[^/]+$",RegexOptions.IgnoreCase))return "feature/include/"+name;
+            if(source=="include/"+name||source=="VideoFX/include/"+name||source.EndsWith("/VideoFX/include/"+name,StringComparison.Ordinal))return "core/include/"+name;
         }
         if(license&&!source.Contains("/docs/",StringComparison.Ordinal)) {
             // Preserve separately sourced feature licenses as well as Core terms.

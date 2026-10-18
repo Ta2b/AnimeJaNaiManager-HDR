@@ -13,6 +13,11 @@
         <ProgressBar IsIndeterminate="True" IsVisible="{Binding OptionalSdks.IsTrueHdrBusy}" />
         <Button Content="Cancel import" Command="{Binding OptionalSdks.Cancel}" IsVisible="{Binding OptionalSdks.IsTrueHdrBusy}" HorizontalAlignment="Left" />
         <TextBlock Text="{Binding OptionalSdks.TrueHdrImportStatus}" TextWrapping="Wrap" />
+        <StackPanel Spacing="8" IsVisible="{Binding OptionalSdks.ShowBridge}">
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="TrueHDR also needs a small bridge, libaji_rtx.so, compiled on this computer against the imported SDK (a C++ compiler is required). It is built automatically after the import." />
+          <Button Name="BuildTrueHdrBridge" Content="3. Build the TrueHDR bridge" Command="{Binding OptionalSdks.BuildBridge}" IsEnabled="{Binding OptionalSdks.CanBuildBridge}" HorizontalAlignment="Left" />
+          <TextBlock Text="{Binding OptionalSdks.BridgeStatus}" TextWrapping="Wrap" />
+        </StackPanel>
       </StackPanel>
     </Border>
     <Expander Name="PreparationEngineExpander" Header="GMFSS Fortuna · video preparation engine" HorizontalAlignment="Stretch" IsExpanded="{Binding PreparationEngineExpanded, Mode=TwoWay}">

@@ -359,7 +359,7 @@
                 </WrapPanel>
                 <TextBlock Name="HdrModeSummary" Text="{Binding HdrSettings.ModeSummary}" TextWrapping="Wrap" />
                 <TextBlock Name="TrueHdrAvailability" Classes="help" Text="{Binding OptionalSdks.TrueHdrStatus}" TextWrapping="Wrap" IsVisible="{Binding LinuxFeatures}" />
-                <Button Content="Install the TrueHDR SDK…" Classes="secondary" Command="{Binding ShowOptionalEngines}" HorizontalAlignment="Left" IsVisible="{Binding TrueHdrSdkMissing}" />
+                <Button Content="Set up TrueHDR (Engines)…" Classes="secondary" Command="{Binding ShowOptionalEngines}" HorizontalAlignment="Left" IsVisible="{Binding TrueHdrSetupNeeded}" />
               </StackPanel>
             </Border>
 

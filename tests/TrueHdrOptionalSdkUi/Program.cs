@@ -29,7 +29,7 @@ Import(Path.GetFullPath(args[2]));Check("Core-only import reports the missing fe
 Import(Path.GetFullPath(args[3]));Environment.SetEnvironmentVariable("ANIMEJANAI_VFX_SDK",null);vm.OptionalSdks.Refresh();Dispatcher.UIThread.RunJobs();
 Check("the complete managed SDK becomes the automatic root; the next cause is named",vm.OptionalSdks.TrueHdrRoot.Contains("optional-sdks/truehdr/versions/")&&!vm.TrueHdrSdkMissing&&vm.OptionalSdks.TrueHdrStatus.Contains("libaji_trt_rtx.so"));
 File.WriteAllText(Path.Combine(inf,"libaji_trt_rtx.so"),"fixture");vm.OptionalSdks.Refresh();Dispatcher.UIThread.RunJobs();
-Check("the SDK bridge module is named with the reason it is not in the release",vm.OptionalSdks.TrueHdrStatus.Contains("libaji_rtx.so")&&vm.OptionalSdks.TrueHdrStatus.Contains("no release includes it"));
+Check("the bridge is named with what building it needs (synthetic archives carry no headers)",vm.OptionalSdks.TrueHdrStatus.Contains("libaji_rtx.so")&&vm.OptionalSdks.TrueHdrStatus.Contains("headers")&&!vm.OptionalSdks.CanBuildBridge&&vm.OptionalSdks.ShowBridge);
 File.WriteAllText(Path.Combine(inf,"libaji_rtx.so"),"fixture");vm.OptionalSdks.Refresh();Dispatcher.UIThread.RunJobs();
 Check("with SDR output the remaining cause is the PQ output",!vm.OptionalSdks.TrueHdrReady&&vm.OptionalSdks.TrueHdrStatus.Contains("HDR PQ output"));
 vm.HdrSettings.LinuxPq=true;vm.OptionalSdks.Refresh();vm.RefreshTrueHdrChoice();Dispatcher.UIThread.RunJobs();
