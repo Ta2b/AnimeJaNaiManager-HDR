@@ -42,6 +42,8 @@ try
     ToggleButton Named(string content) => window.GetVisualDescendants().OfType<ToggleButton>().First(button => Equals(button.Content, content));
     if (mac)
     {
+        // The engine and its Apple settings are on the Engines page.
+        vm.ShowEngines(); Dispatcher.UIThread.RunJobs();
         var apple = window.FindControl<StackPanel>("AppleSettingsPanel")!;
         Check("Apple Silicon settings shown", apple.IsEffectivelyVisible && Named("Metal").IsEffectivelyVisible);
         Check("engines of other platforms hidden", !Named("TensorRT").IsEffectivelyVisible && !Named("DirectML").IsEffectivelyVisible);
@@ -85,6 +87,7 @@ try
         held.IsChecked = true; Dispatcher.UIThread.RunJobs();
         var read = vm.ReadAnimeJaNaiConf(Path.Combine(data, "animejanai.conf"));
         Check("Balanced on held drawings is saved when ticked and read again", Bank().Contains("engine_boost=yes") && read.EngineBoost && read.RifeDevice == "npu" && read.AppleDevice == "GPU+NPU+CPU");
+        vm.HandleShowGlobalSettings(); Dispatcher.UIThread.RunJobs();
     }
     foreach (string name in new[] { "HdrAppearanceExpander", "PlaybackSettingsExpander", "EngineSettingsExpander", "DiagnosticsExpander" })
         Check(name + " initially collapsed", window.FindControl<Expander>(name)?.IsExpanded == false);
@@ -107,11 +110,13 @@ try
     var advanced = window.FindControl<Expander>("HdrAppearanceExpander")!;
     advanced.IsExpanded = true; Dispatcher.UIThread.RunJobs();
     ToggleButton Toggle(string content) => window.GetVisualDescendants().OfType<ToggleButton>().First(button => Equals(button.Content, content));
-    if (!mac) Check("RTX Video HDR follows the NVIDIA detection", Toggle("RTX Video HDR").IsEnabled == vm.RtxHdrSelectable);
+    if (!mac) Check("NVIDIA TrueHDR is greyed exactly when it cannot run, with its cause shown", Toggle("NVIDIA TrueHDR").IsEnabled == vm.TrueHdrSelectable && (vm.TrueHdrSelectable || vm.OptionalSdks.TrueHdrStatus.Length > 0));
     if (OperatingSystem.IsLinux() && !mac)
     {
+        vm.ShowEngines(); Dispatcher.UIThread.RunJobs();
         Check("MIGraphX follows the AMD detection", Toggle("MIGraphX + HIP").IsEnabled == vm.MiGraphXSelectable);
         Check("OpenVINO follows the Intel detection", Toggle("OpenVINO").IsEnabled == vm.OpenVinoSelectable);
+        vm.HandleShowGlobalSettings(); Dispatcher.UIThread.RunJobs();
         window.FindControl<Expander>("PlaybackSettingsExpander")!.IsExpanded = true; Dispatcher.UIThread.RunJobs();
         var smooth = window.GetVisualDescendants().OfType<CheckBox>().Single(box => Equals(box.Content, "NVIDIA Smooth Motion (driver frame generation)"));
         Check("Smooth Motion follows the NVIDIA driver detection", smooth.IsEnabled == vm.SmoothMotionSelectable);

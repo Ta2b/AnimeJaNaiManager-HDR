@@ -65,11 +65,10 @@ namespace AnimeJaNaiConfEditor.Views
 
         private void MainWindow_Opened(object? sender, EventArgs e)
         {
+            // The first open stays on Profiles: missing components are announced there with
+            // their install action (the component list loads in the background).
             if (DataContext is MainWindowViewModel vm && vm.NotMacFeatures && vm.OptionalSdks.NeedsOnboarding)
-            {
-                vm.ShowOptionalEngines();
                 vm.OptionalSdks.AcknowledgeOnboarding();
-            }
         }
 
         private bool _stoppingPreparation;

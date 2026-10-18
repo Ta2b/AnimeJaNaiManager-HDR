@@ -42,8 +42,10 @@ internal static class IniPreservingSave
                     var comment = Regex.Match(line, @"\s+[#;].*$");
                     result.Add(replacement + (comment.Success ? comment.Value : "")); continue;
                 }
+                // Slot keys the Manager did not regenerate are gone: old legacy mirrors, rules
+                // without a number (chain__*) and the retired profile HDR marker included.
                 if ((section == "global" && globals.Contains(name)) ||
-                    (Regex.IsMatch(section, @"^slot_\d+$") && (name == "profile_name" || Regex.IsMatch(name, @"^chain_\d+_")))) continue;
+                    (Regex.IsMatch(section, @"^slot_\d+$") && (name == "profile_name" || name == "hdr_stage_controlled" || Regex.IsMatch(name, @"^chain_\d*_")))) continue;
             }
             result.Add(line);
         }

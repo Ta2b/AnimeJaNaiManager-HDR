@@ -1,22 +1,21 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:AnimeJaNaiConfEditor.ViewModels" xmlns:ui="clr-namespace:FluentAvalonia.UI.Controls;assembly=FluentAvalonia"
              x:Class="AnimeJaNaiConfEditor.Views.InterpolationStages" x:DataType="vm:UpscaleChain">
-  <StackPanel Spacing="16">
+  <StackPanel Spacing="14">
     <Grid ColumnDefinitions="*,Auto">
-      <StackPanel Spacing="4" Margin="0,0,16,0">
+      <StackPanel Spacing="3" Margin="0,0,16,0">
         <TextBlock Classes="section-title" Text="Processing steps" />
         <TextBlock Classes="muted" Text="Steps run from top to bottom. Select a step to change its settings." TextWrapping="Wrap" />
       </StackPanel>
       <Button Name="AddProcessingStep" Grid.Column="1" Content="＋ Add step" Classes="accent" VerticalAlignment="Top" IsEnabled="{Binding CanAddStage}" ToolTip.Tip="{Binding AddStageHint}">
         <Button.Flyout>
           <Flyout Placement="BottomEdgeAlignedRight">
-            <StackPanel Spacing="6" MinWidth="240">
+            <StackPanel Spacing="6" MinWidth="260">
               <TextBlock Text="Choose a category" FontWeight="SemiBold" Margin="8,4,8,8" />
               <Button Content="Interpolation" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Command="{Binding AddInterpolationStage}" Click="OnAddStep" />
               <Button Content="Upscale" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Command="{Binding AddUpscaleStage}" Click="OnAddStep" />
               <Button Content="Downscale" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Command="{Binding AddDownscaleStage}" Click="OnAddStep" />
-              <Button Name="AddHdrStep" Content="HDR conversion" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Command="{Binding AddHdrStage}" IsEnabled="{Binding CanAddHdrStage}" ToolTip.Tip="{Binding HdrSetupHint}" Click="OnAddStep" />
-              <TextBlock Classes="muted" Text="One HDR conversion per profile." Margin="8,4" TextWrapping="Wrap" />
+              <TextBlock Classes="muted" Text="HDR conversion is a global setting: see Settings." Margin="8,4" TextWrapping="Wrap" />
             </StackPanel>
           </Flyout>
         </Button.Flyout>
@@ -24,8 +23,8 @@
     </Grid>
     <Border Classes="section-card" IsVisible="{Binding !HasStages}">
       <StackPanel Spacing="8">
-        <TextBlock Text="Build your processing order" FontWeight="SemiBold" />
-        <TextBlock Text="Add only the steps you need. For example: downscale → interpolation → upscale. Each step has its own technology and settings." TextWrapping="Wrap" />
+        <TextBlock Text="No step yet" FontWeight="SemiBold" />
+        <TextBlock Text="Add only what you need: an upscale alone, or interpolation then upscale. A downscale placed before RIFE lowers the cost and the output size." TextWrapping="Wrap" />
       </StackPanel>
     </Border>
     <ListBox Name="OrderedStages" ItemsSource="{Binding Stages}" SelectedItem="{Binding SelectedStage, Mode=TwoWay}" IsVisible="{Binding HasStages}" IsEnabled="{Binding PipelineEditable}" Background="Transparent" BorderThickness="0" Padding="0">
@@ -39,7 +38,9 @@
               <TextBlock Text="{Binding Summary}" Classes="muted" TextTrimming="CharacterEllipsis" />
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-              <TextBlock Text="{Binding StateLabel}" Classes="muted" VerticalAlignment="Center" Margin="0,0,8,0" />
+              <Border Classes="state" Classes.active="{Binding IsActive}" Classes.blocked="{Binding IsBlocked}" VerticalAlignment="Center" Margin="0,0,8,0" ToolTip.Tip="{Binding Availability}">
+                <TextBlock Text="{Binding StateLabel}" FontSize="12" />
+              </Border>
               <Button Content="↑" Classes="secondary" Command="{Binding MoveUp}" IsEnabled="{Binding CanMoveUp}" ToolTip.Tip="Move step up" AutomationProperties.Name="Move step up" />
               <Button Content="↓" Classes="secondary" Command="{Binding MoveDown}" IsEnabled="{Binding CanMoveDown}" ToolTip.Tip="Move step down" AutomationProperties.Name="Move step down" />
             </StackPanel>
@@ -56,7 +57,14 @@
                 <TextBlock Classes="section-title" Text="{Binding Header}" VerticalAlignment="Center" />
                 <Button Grid.Column="1" Content="Remove" Classes="secondary" Command="{Binding Remove}" ToolTip.Tip="Remove this step from the rule" />
               </Grid>
-              <Grid ColumnDefinitions="130,*" ColumnSpacing="12">
+              <Border Classes="blocked-card" IsVisible="{Binding IsBlocked}">
+                <StackPanel Spacing="8">
+                  <TextBlock Text="This step cannot run yet" FontWeight="SemiBold" />
+                  <TextBlock Name="StepAvailability" Text="{Binding Availability}" TextWrapping="Wrap" />
+                  <Button Content="{Binding ActionLabel}" Classes="accent" Command="{Binding OpenEngineSetup}" IsVisible="{Binding HasAvailabilityAction}" HorizontalAlignment="Left" />
+                </StackPanel>
+              </Border>
+              <Grid ColumnDefinitions="140,*" ColumnSpacing="12">
                 <TextBlock Text="Technology" VerticalAlignment="Center" />
                 <ComboBox Grid.Column="1" Name="StageTechnology" HorizontalAlignment="Stretch" ItemsSource="{Binding TechnologyChoices}" SelectedItem="{Binding SelectedTechnology, Mode=TwoWay}" IsEnabled="{Binding TechnologyEditable}">
                   <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:StageTechnology"><TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Reason}" /></DataTemplate></ComboBox.ItemTemplate>
@@ -64,31 +72,41 @@
                 </ComboBox>
               </Grid>
               <TextBlock Text="{Binding ModeNotice}" Classes="muted" TextWrapping="Wrap" />
-              <Grid Name="RifeModeControls" ColumnDefinitions="130,*" ColumnSpacing="12" IsVisible="{Binding IsRife}">
+              <Grid Name="RifeModeControls" ColumnDefinitions="140,*" ColumnSpacing="12" IsVisible="{Binding IsRife}">
                 <TextBlock Text="RIFE mode" VerticalAlignment="Center" />
-                <ComboBox Grid.Column="1" Name="RifeMode" MinWidth="130" ItemsSource="{Binding PolicyChoices}" SelectedItem="{Binding Policy}" />
-              </Grid>
-              <Grid ColumnDefinitions="130,*" ColumnSpacing="12" IsVisible="{Binding HasModel}">
-                <TextBlock Text="Model / variant" VerticalAlignment="Center" />
-                <ui:FAComboBox Grid.Column="1" Name="StageModel" IsEditable="True" HorizontalAlignment="Stretch" Text="{Binding Model, Mode=TwoWay}" ItemsSource="{Binding ModelChoices}" />
-              </Grid>
-              <Grid ColumnDefinitions="130,*" ColumnSpacing="12" IsVisible="{Binding IsRife}">
-                <TextBlock Text="Frame-rate factor" VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                  <TextBlock Text="×" VerticalAlignment="Center" /><TextBox Name="StageNumerator" Width="68" Text="{Binding Numerator}" /><TextBlock Text="/" VerticalAlignment="Center" /><TextBox Name="StageDenominator" Width="68" Text="{Binding Denominator}" />
+                <StackPanel Grid.Column="1" Spacing="4">
+                  <ComboBox Name="RifeMode" MinWidth="130" HorizontalAlignment="Left" ItemsSource="{Binding PolicyChoiceLabels}" SelectedItem="{Binding PolicyChoice}" />
                 </StackPanel>
               </Grid>
-              <Grid ColumnDefinitions="130,*" ColumnSpacing="12" IsVisible="{Binding IsResize}"><ComboBox ItemsSource="{Binding ResizeUnitChoices}" SelectedItem="{Binding ResizeUnit}" /><TextBox Name="DownscaleHeight" Grid.Column="1" MaxWidth="180" HorizontalAlignment="Left" Text="{Binding ResizeValue}" /></Grid>
-              <Grid ColumnDefinitions="130,*" ColumnSpacing="12" IsVisible="{Binding IsNvidiaHdr}"><TextBlock Text="Peak (nits)" VerticalAlignment="Center" /><TextBox Name="HdrPeak" Grid.Column="1" MaxWidth="180" HorizontalAlignment="Left" Text="{Binding HdrPeak}" /></Grid>
-              <Button Content="Use installed TrueHDR SDK" Command="{Binding UseInstalledHdrSdk}" IsVisible="{Binding CanUseInstalledHdrSdk}" HorizontalAlignment="Left" />
-              <Border Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
-                <StackPanel Spacing="8"><TextBlock Name="StepAvailability" Text="{Binding Availability}" TextWrapping="Wrap" /><Button Content="Manage engines and models…" Classes="secondary" Command="{Binding OpenEngineSetup}" IsVisible="{Binding HasAvailabilityAction}" HorizontalAlignment="Left" /></StackPanel>
-              </Border>
+              <Grid ColumnDefinitions="140,*" ColumnSpacing="12" IsVisible="{Binding IsRife}">
+                <TextBlock Text="RIFE model" VerticalAlignment="Center" />
+                <ComboBox Grid.Column="1" Name="RifeModelChoice" MinWidth="220" HorizontalAlignment="Left" ItemsSource="{Binding RifeModelLabels}" SelectedItem="{Binding RifeModelLabel, Mode=TwoWay}" PlaceholderText="Install the RIFE models (Engines)" />
+              </Grid>
+              <Grid ColumnDefinitions="140,*" ColumnSpacing="12" IsVisible="{Binding IsUpscale}">
+                <TextBlock Text="Model" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Spacing="4">
+                  <ComboBox Name="StageModel" HorizontalAlignment="Stretch" ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding Model, Mode=TwoWay}" PlaceholderText="Choose an installed model">
+                    <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={x:Static vm:ModelLabelConverter.Instance}}" ToolTip.Tip="{Binding}" /></DataTemplate></ComboBox.ItemTemplate>
+                  </ComboBox>
+                  <TextBlock Text="{Binding ModelNote}" Classes="help" TextWrapping="Wrap" />
+                </StackPanel>
+              </Grid>
+              <Grid ColumnDefinitions="140,*" ColumnSpacing="12" IsVisible="{Binding IsRife}">
+                <TextBlock Text="Frame-rate factor" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                  <ComboBox Name="FactorPresetChoice" MinWidth="90" ItemsSource="{Binding FactorPresets}" SelectedItem="{Binding FactorPreset, Mode=TwoWay}" />
+                  <TextBlock Text="{Binding FactorNote}" Classes="help" VerticalAlignment="Center" />
+                </StackPanel>
+              </Grid>
+              <Grid ColumnDefinitions="140,*" ColumnSpacing="12" IsVisible="{Binding IsResize}">
+                <ComboBox ItemsSource="{Binding ResizeUnitChoices}" SelectedItem="{Binding ResizeUnit}" />
+                <TextBox Name="DownscaleHeight" Grid.Column="1" MaxWidth="180" HorizontalAlignment="Left" Text="{Binding ResizeValue}" />
+              </Grid>
               <Expander Header="Advanced settings" HorizontalContentAlignment="Stretch">
                 <StackPanel Spacing="12" Margin="0,8,0,0">
                   <StackPanel Spacing="6" IsVisible="{Binding IsLegacySizing}">
-                    <Button Content="Use downscale-only sizing" Command="{Binding UseDownscaleOnlySizing}" HorizontalAlignment="Left" />
-                    <TextBlock Classes="muted" Text="This disables the step and removes the imported sizing behavior. Check the target size before activating it again." TextWrapping="Wrap" />
+                    <Button Content="Never enlarge (downscale only)" Command="{Binding UseDownscaleOnlySizing}" HorizontalAlignment="Left" />
+                    <TextBlock Classes="muted" Text="Smaller sources then keep their size. The step is deactivated so you can check its target first; this mode runs on TensorRT on Linux only." TextWrapping="Wrap" />
                   </StackPanel>
                   <StackPanel Spacing="6" IsVisible="{Binding CanUseSelectedBackend}">
                     <Button Content="{Binding BackendChangeLabel}" Command="{Binding UseSelectedBackend}" HorizontalAlignment="Left" />
@@ -96,6 +114,12 @@
                   </StackPanel>
                   <TextBlock Classes="muted" IsVisible="{Binding NeedsResizeTechnologyChange}" Text="To use the selected backend, choose a compatible downscale technology above. The current algorithm is preserved until you change it." TextWrapping="Wrap" />
                   <StackPanel IsVisible="{Binding IsRife}" Spacing="10">
+                    <Grid ColumnDefinitions="150,*" ColumnSpacing="12">
+                      <TextBlock Text="Exact fraction" VerticalAlignment="Center" />
+                      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="×" VerticalAlignment="Center" /><TextBox Name="StageNumerator" Width="68" Text="{Binding Numerator}" /><TextBlock Text="/" VerticalAlignment="Center" /><TextBox Name="StageDenominator" Width="68" Text="{Binding Denominator}" />
+                      </StackPanel>
+                    </Grid>
                     <CheckBox Content="Ensemble" IsChecked="{Binding Ensemble}" />
                     <Grid ColumnDefinitions="150,*"><TextBlock Text="Scene threshold" VerticalAlignment="Center" /><TextBox Name="SceneThreshold" Grid.Column="1" MaxWidth="180" HorizontalAlignment="Left" Text="{Binding SceneThreshold}" /></Grid>
                   </StackPanel>
@@ -104,17 +128,7 @@
                     <TextBlock Classes="muted" Text="0 detects the frame count from the model. Temporal models require a compatible reader." TextWrapping="Wrap" />
                     <Grid ColumnDefinitions="150,*"><TextBlock Text="Scene threshold" VerticalAlignment="Center" /><TextBox Grid.Column="1" MaxWidth="180" HorizontalAlignment="Left" Text="{Binding TemporalThreshold}" /></Grid>
                   </StackPanel>
-                  <StackPanel IsVisible="{Binding IsHdr}" Spacing="10">
-                    <CheckBox Name="MpvHdrLook" IsVisible="{Binding IsMpvHdr}" Content="Use the TrueHDR tone curve" IsChecked="{Binding MpvHdrLook}" />
-                    <Grid ColumnDefinitions="150,*"><TextBlock Text="Contrast (0–200)" /><TextBox IsEnabled="{Binding HdrToneCurveControls}" Grid.Column="1" Text="{Binding HdrContrast}" /></Grid>
-                    <Grid ColumnDefinitions="150,*"><TextBlock Text="Saturation (0–200)" /><TextBox IsEnabled="{Binding HdrToneCurveControls}" Grid.Column="1" Text="{Binding HdrSaturation}" /></Grid>
-                    <Grid ColumnDefinitions="150,*"><TextBlock Text="Middle grey (10–100)" /><TextBox IsEnabled="{Binding HdrToneCurveControls}" Grid.Column="1" Text="{Binding HdrMiddleGray}" /></Grid>
-                    <StackPanel IsVisible="{Binding IsMpvHdr}" IsEnabled="{Binding MpvUnmatched}" Spacing="10">
-                      <Grid ColumnDefinitions="150,*"><TextBlock Text="SDR white (nits)" /><TextBox Grid.Column="1" Text="{Binding MpvPaperWhite}" /></Grid>
-                      <Grid ColumnDefinitions="150,*"><TextBlock Text="Highlights (0–100)" /><TextBox Grid.Column="1" Text="{Binding MpvHighlights}" /></Grid>
-                      <Grid ColumnDefinitions="150,*"><TextBlock Text="Vibrance (0–80)" /><TextBox Grid.Column="1" Text="{Binding MpvVibrance}" /></Grid>
-                    </StackPanel>
-                  </StackPanel>
+                  <TextBlock Classes="muted" Text="{Binding AvailabilityLabel}" TextWrapping="Wrap" />
                   <Expander Header="Configuration details" HorizontalContentAlignment="Stretch"><StackPanel Spacing="6"><TextBlock Text="{Binding RuntimeLabel}" /><TextBlock Text="{Binding Id, StringFormat='ID: {0}'}" /><TextBlock Text="{Binding OptionsText}" TextWrapping="Wrap" /></StackPanel></Expander>
                 </StackPanel>
               </Expander>
@@ -123,11 +137,10 @@
         </DataTemplate>
       </ContentControl.ContentTemplate>
     </ContentControl>
-    <StackPanel Spacing="6">
-      <TextBlock Name="OrderedProcessingOrder" Text="{Binding PipelineOrder}" TextWrapping="Wrap" FontWeight="SemiBold" />
-      <TextBlock Name="OrderedCadence" Text="{Binding PipelineCadence}" Classes="muted" TextWrapping="Wrap" />
-      <TextBlock Text="{Binding PipelineNotice}" Classes="muted" TextWrapping="Wrap" />
-      <TextBlock Text="New steps start inactive. Configure them, then activate them with the checkbox in the list." Classes="muted" TextWrapping="Wrap" />
+    <StackPanel Spacing="4">
+      <TextBlock Name="OrderedProcessingOrder" Text="{Binding PipelineOrder}" Classes="muted" TextWrapping="Wrap" />
+      <TextBlock Name="OrderedCadence" Text="{Binding PipelineCadence}" Classes="help" TextWrapping="Wrap" />
+      <TextBlock Text="{Binding PipelineNotice}" Classes="help" TextWrapping="Wrap" />
     </StackPanel>
   </StackPanel>
 </UserControl>

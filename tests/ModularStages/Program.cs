@@ -19,7 +19,7 @@ string data=Path.Combine(output,"data"),inf=Path.Combine(data,"inference");
 foreach(string d in new[]{data,inf,Path.Combine(output,"portable_config","script-opts"),Path.Combine(data,"onnx"),Path.Combine(data,"rife")})Directory.CreateDirectory(d);
 Environment.SetEnvironmentVariable("ANIMEJANAI_DATA_DIR",data);Environment.SetEnvironmentVariable("ANIMEJANAI_INFERENCE_DIR",inf);Environment.SetEnvironmentVariable("ANIMEJANAI_ROOT",output);
 File.WriteAllText(Path.Combine(data,"onnx","SPAN.onnx"),"UI fixture");File.WriteAllText(Path.Combine(data,"rife","rife_v4.26.onnx"),"UI fixture");
-File.WriteAllText(Path.Combine(data,"animejanai.conf"),"[global]\nbackend=TensorRT\nrife_engine=quality\ndefault_slot=1\n[slot_1]\nprofile_name=My modular profile\nhdr_stage_controlled=yes\nchain_1_pipeline_version=1\nchain_1_stage_count=0\n");
+File.WriteAllText(Path.Combine(data,"animejanai.conf"),"[global]\nconfig_version=4\nbackend=TensorRT\nrife_engine=quality\ndefault_slot=1\n[slot_1]\nprofile_name=My modular profile\nchain_1_pipeline_version=1\nchain_1_stage_count=0\n");
 AppBuilder.Configure<AnimeJaNaiConfEditor.App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions{UseHeadlessDrawing=false}).WithInterFont().UseReactiveUI(_=>{}).SetupWithoutStarting();
 var checks=new List<string>();void Check(string name,bool ok){if(!ok)throw new Exception(name);checks.Add(name);Console.WriteLine("PASS "+name);}
 var vm=new MainWindowViewModel();vm.HandleShowCustomProfile("1");vm.AnimeJaNaiConf.SetTensorRtSelected();var chain=vm.CurrentSlot.Chains.Single();chain.AutoSave=false;
@@ -59,7 +59,7 @@ if(args.Contains("--legacy-sizing"))
     var legacyImport=new UpscaleChain(false){Vm=vm,ChainNumber="2"};
     legacyImport.LoadPipeline(new Dictionary<string,string>{{"chain_2_model_1_name","SPAN"},{"chain_2_model_1_resize_height_before_upscale","720"}},"tensorrt","quality");
     var legacyResize=legacyImport.Stages.First();
-    Check("imported geometry is marked and never advertised as a downscale ceiling",legacyResize.IsLegacySizing&&legacyResize.ModeNotice.StartsWith("Legacy sizing preserved")&&legacyResize.OrderDescription.StartsWith("Legacy resize")&&!legacyResize.OrderDescription.Contains("≤"));
+    Check("imported geometry is marked as an exact size and never advertised as a downscale ceiling",legacyResize.IsLegacySizing&&legacyResize.ModeNotice.StartsWith("Exact size")&&legacyResize.OrderDescription.StartsWith("Resize to")&&!legacyResize.OrderDescription.Contains("≤"));
     Check("legacy geometry stays in the raw options until explicit action",legacyResize.OptionsText.Contains("legacy_geometry=")&&legacyResize.TechnologyEditable);
     legacyResize.UseDownscaleOnlySizing();
     Check("downscale-only action removes only geometry marker and disables step",!legacyResize.IsLegacySizing&&!legacyResize.Enabled&&legacyResize.Method=="spline36"&&legacyResize.TargetHeight=="720"&&legacyResize.OrderDescription.Contains("≤"));
@@ -69,24 +69,22 @@ var view=new InterpolationStages{DataContext=chain};var window=new Window{Conten
 Check("empty profile stays empty and presents one add action",!chain.HasStages&&chain.SelectedStage==null&&view.GetVisualDescendants().OfType<Button>().Count(b=>b.Name=="AddProcessingStep")==1);
 var add=view.FindControl<Button>("AddProcessingStep")!;add.Flyout!.ShowAt(add);Dispatcher.UIThread.RunJobs();
 var menu=(StackPanel)((Flyout)add.Flyout).Content!;var choices=menu.GetLogicalDescendants().OfType<Button>().ToArray();
-Check("add menu binds exactly four fixed categories",choices.Select(b=>b.Content?.ToString()).SequenceEqual(new[]{"Interpolation","Upscale","Downscale","HDR conversion"})&&choices.All(b=>b.Command!=null));
-foreach(string name in new[]{"Downscale","Interpolation","Upscale","HDR conversion"})choices.Single(b=>b.Content?.ToString()==name).Command!.Execute(null);
+Check("add menu binds exactly three fixed categories, HDR being a global setting",choices.Select(b=>b.Content?.ToString()).SequenceEqual(new[]{"Interpolation","Upscale","Downscale"})&&choices.All(b=>b.Command!=null));
+foreach(string name in new[]{"Downscale","Interpolation","Upscale"})choices.Single(b=>b.Content?.ToString()==name).Command!.Execute(null);
 add.Flyout.Hide();Dispatcher.UIThread.RunJobs();
-Check("new stages are inactive, ordered and selection follows the new step",chain.Stages.Select(s=>s.Kind).SequenceEqual(new[]{"resize","interpolate","upscale","hdr"})&&chain.Stages.All(s=>!s.Enabled)&&chain.SelectedStage==chain.Stages.Last());
-var resize=chain.Stages[0];var rife=chain.Stages[1];var upscale=chain.Stages[2];var hdr=chain.Stages[3];
-Check("category technology choices do not cross categories",resize.MethodChoices.SequenceEqual(new[]{"Area","Spline36"})&&rife.MethodChoices.SequenceEqual(new[]{"RIFE"})&&upscale.MethodChoices.SequenceEqual(new[]{"ONNX upscale"})&&hdr.MethodChoices.SequenceEqual(new[]{"mpv HDR","NVIDIA TrueHDR"}));
+Check("new stages without their engine files are inactive, ordered and selection follows the new step",chain.Stages.Select(s=>s.Kind).SequenceEqual(new[]{"resize","interpolate","upscale"})&&chain.Stages.All(s=>!s.Enabled)&&chain.SelectedStage==chain.Stages.Last());
+var resize=chain.Stages[0];var rife=chain.Stages[1];var upscale=chain.Stages[2];
+Check("category technology choices do not cross categories",resize.MethodChoices.SequenceEqual(new[]{"Area","Spline36"})&&rife.MethodChoices.SequenceEqual(new[]{"RIFE"})&&upscale.MethodChoices.SequenceEqual(new[]{"ONNX upscale"}));
 resize.MethodChoice="RIFE";Check("attempted cross-category replacement leaves the downscale intact",resize.Kind=="resize"&&resize.Method=="area");
 chain.SelectedStage=resize;Dispatcher.UIThread.RunJobs();
 Check("only selected settings are rendered and RIFE mode stays hidden for downscale",view.GetVisualDescendants().OfType<ComboBox>().Count(c=>c.Name=="StageTechnology"&&c.IsEffectivelyVisible)==1&&!view.GetVisualDescendants().OfType<ComboBox>().Any(c=>c.Name=="RifeMode"&&c.IsEffectivelyVisible));
 chain.SelectedStage=rife;Dispatcher.UIThread.RunJobs();
 Check("RIFE mode appears only for RIFE and advanced settings start collapsed",view.GetVisualDescendants().OfType<ComboBox>().Any(c=>c.Name=="RifeMode"&&c.IsEffectivelyVisible)&&view.GetVisualDescendants().OfType<Expander>().All(e=>!e.IsExpanded));
 string rifeId=rife.Id;chain.MoveStage(rife,1);Check("reorder preserves stage identity, settings and selection",chain.Stages[2]==rife&&chain.SelectedStage==rife&&rife.Id==rifeId&&rife.Policy=="quality");chain.MoveStage(rife,-1);
-var second=new UpscaleChain(false){Vm=vm,ChainNumber="2"};vm.CurrentSlot.Chains.Add(second);chain.RefreshPipeline();second.RefreshPipeline();second.AddHdrStage();
-Check("one HDR per profile includes inactive steps and other rules",!chain.CanAddHdrStage&&!second.CanAddHdrStage&&second.Stages.Count==0);
-Check("mpv HDR is SDK-free and missing TrueHDR remains explicit",hdr.Method=="mpv"&&hdr.CanEnable&&hdr.TechnologyChoices.Single(t=>t.Name=="mpv HDR").Available&&!hdr.TechnologyChoices.Single(t=>t.Name=="NVIDIA TrueHDR").Available);
-chain.SelectedStage=hdr;Dispatcher.UIThread.RunJobs();
-using(var frame=window.CaptureRenderedFrame()){if(frame==null)throw new Exception("No rendered frame");frame.Save(Path.Combine(output,"modular-hdr-light.png"));}
-chain.DeleteStage(hdr);Check("removal selects a surviving neighbour and unlocks HDR in other rules",chain.SelectedStage==upscale&&chain.CanAddHdrStage&&second.CanAddHdrStage);vm.CurrentSlot.Chains.Remove(second);
+chain.SelectedStage=upscale;Dispatcher.UIThread.RunJobs();
+Check("a step without its engine shows its cause and the action that fixes it",upscale.Availability.StartsWith("TensorRT is not installed")&&upscale.HasAvailabilityAction&&upscale.ActionLabel=="Install TensorRT");
+using(var frame=window.CaptureRenderedFrame()){if(frame==null)throw new Exception("No rendered frame");frame.Save(Path.Combine(output,"modular-light.png"));}
+chain.DeleteStage(upscale);Check("removal selects a surviving neighbour",chain.SelectedStage==rife&&chain.Stages.Count==2);
 chain.AddRifeStage();var fast=chain.SelectedStage!;fast.Policy="fast";rife.Enabled=true;fast.Enabled=true;
 Check("independent RIFE modes compose a fourfold cadence",rife.Policy=="quality"&&fast.Policy=="fast"&&chain.PipelineCadence=="24 → 48 → 96 fps (24 fps source example)");
 var saved=Path.Combine(output,"saved.conf");vm.WriteAnimeJaNaiConf(saved);var loaded=vm.ReadAnimeJaNaiConf(saved).UpscaleSlots.Single().Chains.Single();

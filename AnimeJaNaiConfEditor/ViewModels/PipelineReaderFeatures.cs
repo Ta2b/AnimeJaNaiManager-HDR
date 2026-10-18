@@ -11,11 +11,24 @@ internal static class PipelineReaderFeatures
     public static bool HasRenderHdr(string directory)=>(Read(directory)&8)!=0;
     public static bool HasTrueHdr(string directory)=>(Read(directory)&2)!=0;
     public static bool HasSpline36Downscale(string directory)=>(Read(directory)&4)!=0;
+    // Every capability of the module the player ships today: area and spline36 downscale,
+    // TrueHDR adapter, render HDR. Used when the module is a managed link into an AppImage
+    // that is not mounted right now (the link is re-made at every player launch).
+    public const ulong ShippedFeatures=1|2|4|8;
+    public static string? ImageInferenceDirectory => Environment.GetEnvironmentVariable("ANIMEJANAI_IMAGE_DIR") is {Length:>0} image?Path.Combine(image,"animejanai","inference"):null;
+    // A managed entry: a symbolic link left by the player, dangling once its image is unmounted.
+    public static bool ManagedLink(string path){try{return new FileInfo(path).LinkTarget!=null;}catch(Exception e)when(e is IOException or UnauthorizedAccessException){return false;}}
+    public static bool Present(string path)=>File.Exists(path)||ManagedLink(path)||(ImageInferenceDirectory is {} image&&File.Exists(Path.Combine(image,Path.GetFileName(path))));
     public static ulong Read(string directory,string library="libaji_pipeline.so",string symbol="aji_pipeline_features_v1")
     {
         if(!MainWindowViewModel.OnLinux)return 0;
         string path=Path.GetFullPath(Path.Combine(directory,library));
-        var file=new FileInfo(path);if(!file.Exists)return 0;
+        var file=new FileInfo(path);
+        if(!file.Exists)
+        {
+            if(ImageInferenceDirectory is {} image&&File.Exists(Path.Combine(image,library))){path=Path.Combine(image,library);file=new FileInfo(path);}
+            else return ManagedLink(path)?ShippedFeatures:0;
+        }
         lock(cache) {
             long size=file.Length,stamp=file.LastWriteTimeUtc.Ticks;
             if(cache.TryGetValue(path,out var found)&&found.Size==size&&found.Stamp==stamp)return found.Value;

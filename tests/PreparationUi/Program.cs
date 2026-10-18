@@ -46,7 +46,9 @@ Finish(prep.InspectAsync());Check("inspection returns idle without advertising a
 Finish(prep.PrepareAsync());Check("first job completes and exposes its output",prep.NotBusy&&prep.CanOpen&&prep.Progress==100&&File.ReadAllText(prep.Destination)=="completed fake export");
 using(var frame=main.CaptureRenderedFrame()){if(frame==null)throw new Exception("No preparation frame");frame.Save(Path.Combine(output,"preparation-complete.png"));}
 vm.ShowEngines();Dispatcher.UIThread.RunJobs();
-Check("GMFSS setup lives in Engines and there are no FRUC controls",main.GetVisualDescendants().OfType<TextBox>().Any(c=>c.Name=="PreparationPython"&&c.IsEffectivelyVisible)&&!main.GetVisualDescendants().OfType<Control>().Any(c=>c.Name?.Contains("Fruc",StringComparison.OrdinalIgnoreCase)==true));
+Check("GMFSS setup is folded on the Engines page",!main.GetVisualDescendants().OfType<TextBox>().Any(c=>c.Name=="PreparationPython"&&c.IsEffectivelyVisible));
+prep.ConfigureEngine();Dispatcher.UIThread.RunJobs();
+Check("GMFSS setup lives in Engines, the preparation shortcut unfolds it, and there are no FRUC controls",main.GetVisualDescendants().OfType<TextBox>().Any(c=>c.Name=="PreparationPython"&&c.IsEffectivelyVisible)&&!main.GetVisualDescendants().OfType<Control>().Any(c=>c.Name?.Contains("Fruc",StringComparison.OrdinalIgnoreCase)==true));
 using(var frame=main.CaptureRenderedFrame()){if(frame==null)throw new Exception("No engines frame");frame.Save(Path.Combine(output,"engines-preparation-setup.png"));}
 // The same model and views must keep codec/audio through navigation.
 vm.ShowPreparation();Dispatcher.UIThread.RunJobs();Check("view navigation preserves output codec and audio policy",prep.OutputCodec=="lossless-rgb"&&prep.Audio=="copy");

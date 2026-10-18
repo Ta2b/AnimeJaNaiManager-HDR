@@ -38,7 +38,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             HdrSettings = new HdrSettings(HdrConfPath,
                 _expectedBank.Contains("nvidia") ? "nvidia" : _expectedBank.Contains("amd") ? "amd" : null);
             OptionalSdks = new OptionalSdkViewModel(DataDir, RefreshOptionalSdkStages);
-            foreach(var profile in AnimeJaNaiConf.UpscaleSlots)MigrateLegacyHdr(profile);
+            ApplyDroppedHdrStages();
             Engines = new EngineStore(DataDir);
             Engines.Refresh();
             for (var i = 0; i < AnimeJaNaiConf.UpscaleSlots.Count; i++)
@@ -61,11 +61,17 @@ namespace AnimeJaNaiConfEditor.ViewModels
 
         public OptionalSdkViewModel OptionalSdks { get; }
         public void ShowOptionalEngines() => ShowEngines();
+        // Settings → HDR conversion: TrueHDR is offered when the player can run it here.
+        public bool TrueHdrSelectable => OnWindows ? RtxHdrSelectable : OptionalSdks?.TrueHdrReady == true;
+        public bool TrueHdrSdkMissing => OnLinux && OptionalSdks is { } sdks && !OptionalSdkViewModel.HasTrueHdrSdk(sdks.TrueHdrRoot);
+        public void RefreshTrueHdrChoice() { foreach (var name in new[] { nameof(TrueHdrSelectable), nameof(TrueHdrSdkMissing) }) this.RaisePropertyChanged(name); }
+        public async void InstallRecommendedComponents() => await ComponentManager.InstallMissingPreselectedAsync();
         public void ReturnToProfiles() => NavigateProfiles();
         private void RefreshOptionalSdkStages()
         {
             foreach (var slot in AnimeJaNaiConf.UpscaleSlots)
                 foreach (var chain in slot.Chains) chain.RefreshPipeline();
+            RefreshTrueHdrChoice();
             WriteAnimeJaNaiConf();
         }
 
@@ -284,8 +290,19 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 OnnxRuntimeSelectable = OnnxRuntimeOnDisk() || NativeMiGraphXOnDisk();
                 MiGraphXSelectable = OnnxRuntimeSelectable && gpu.MiGraphX;
                 OpenVinoSelectable = OnnxRuntimeSelectable && gpu.OpenVino;
+                // A fresh NVIDIA install starts on Vulkan as a fallback (backend_auto_fallback=yes
+                // in the shipped bank); once TensorRT is installed it becomes the engine.
+                if (trtUsable && nvidia == true && AnimeJaNaiConf.VulkanSelected && AnimeJaNaiConf.BackendAutoFallback)
+                {
+                    string previous = AnimeJaNaiConf.EngineRuntime;
+                    AnimeJaNaiConf.SetTensorRtSelected();
+                    FollowEngine(previous, AnimeJaNaiConf.EngineRuntime);
+                    EngineChangeNotice = "TensorRT is installed: it is now the engine. " + EngineChangeNotice.Replace("Your profiles now run on TensorRT. ", "Your profiles follow it. ") +
+                        " Add recommended profiles (Profiles page) for higher resolutions.";
+                    this.RaisePropertyChanged(nameof(EngineChangeNotice)); this.RaisePropertyChanged(nameof(HasEngineChangeNotice)); this.RaisePropertyChanged(nameof(HasAnyProfileNotice));
+                }
                 AnimeJaNaiConf.BackendAutoFallback = false;
-                if (AnimeJaNaiConf.DirectMlSelected) AnimeJaNaiConf.SetTensorRtSelected();
+                if (AnimeJaNaiConf.DirectMlSelected) { string previous = AnimeJaNaiConf.EngineRuntime; AnimeJaNaiConf.SetTensorRtSelected(); FollowEngine(previous, AnimeJaNaiConf.EngineRuntime); }
                 BackendNotice = AnimeJaNaiConf.OnnxRuntimeSelected
                     ? (OnnxRuntimeSelectable
                         ? (AnimeJaNaiConf.MiGraphXSelected
@@ -321,7 +338,9 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 // TensorRT is the natural path on NVIDIA: the DirectML selection was
                 // only our fallback, so installing TensorRT completes the setup
                 AnimeJaNaiConf.BackendAutoFallback = false;
+                string previous = AnimeJaNaiConf.EngineRuntime;
                 AnimeJaNaiConf.SetTensorRtSelected();
+                FollowEngine(previous, AnimeJaNaiConf.EngineRuntime);
                 notice = "TensorRT is installed — the backend has switched back to TensorRT.";
             }
             else if (!trtUsable)
@@ -332,7 +351,9 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 if (AnimeJaNaiConf != null && AnimeJaNaiConf.TensorRtSelected)
                 {
                     AnimeJaNaiConf.BackendAutoFallback = true;
+                    string previous = AnimeJaNaiConf.EngineRuntime;
                     AnimeJaNaiConf.SetDirectMlSelected();
+                    FollowEngine(previous, AnimeJaNaiConf.EngineRuntime);
                     flipped = "Switched to DirectML: ";
                 }
                 notice = nvidia == false
@@ -555,7 +576,8 @@ namespace AnimeJaNaiConfEditor.ViewModels
 
         public void AddChain()
         {
-            CurrentSlot.Chains.Add(new UpscaleChain(true) { Vm = this });
+            // Numbered before it is added: the auto-save runs on the collection change.
+            CurrentSlot.Chains.Add(new UpscaleChain(true) { Vm = this, ChainNumber = (CurrentSlot.Chains.Count + 1).ToString() });
             UpdateChainHeaders();
         }
 
@@ -594,7 +616,41 @@ namespace AnimeJaNaiConfEditor.ViewModels
 
         public AvaloniaList<UpscaleSlot> AllSlots => new(AnimeJaNaiConf?.UpscaleSlots.Where(x=>x.ShowSlot&&!x.ActiveSlot)??[]);
         public string ProfileMigrationNotice { get; private set; } = "";
+        // Engine change: the steps that ran on the previous engine follow the new one.
+        public string EngineChangeNotice { get; private set; } = "";
+        public bool HasEngineChangeNotice => EngineChangeNotice.Length > 0;
+        internal static string EngineLabel(string runtime) => runtime switch
+        {
+            "tensorrt" => "TensorRT", "vulkan" => "Vulkan", "directml" => "DirectML", "migraphx" => "MIGraphX + HIP",
+            "openvino" => "OpenVINO", "coreml" => "Core ML (ONNX Runtime)", "coremlnative" => "Core ML (native)", "metal" => "Metal", _ => runtime
+        };
+        internal void FollowEngine(string from, string to)
+        {
+            if (from == to || AnimeJaNaiConf is null) return;
+            string platform = OnWindows ? "windows" : OnMac ? "macos" : "linux";
+            var changes = new List<string>(); int moved = 0;
+            _profileReadDepth++;
+            try
+            {
+                foreach (var slot in AnimeJaNaiConf.UpscaleSlots)
+                    foreach (var chain in slot.Chains.Where(c => c.PipelineEditable))
+                        foreach (var stage in chain.Stages)
+                        {
+                            var change = stage.FollowEngine(from, to, platform);
+                            if (change is null) continue;
+                            moved++; if (change.Length > 0) changes.Add(change);
+                        }
+            }
+            finally { _profileReadDepth--; }
+            if (moved == 0) return;
+            EngineChangeNotice = $"Your profiles now run on {EngineLabel(to)}." + (changes.Count > 0
+                ? " Changed for this engine: " + string.Join("; ", changes.GroupBy(c => c).Select(g => g.Count() > 1 ? $"{g.Key} ({g.Count()} steps)" : g.Key)) + "."
+                : "");
+            this.RaisePropertyChanged(nameof(EngineChangeNotice)); this.RaisePropertyChanged(nameof(HasEngineChangeNotice)); this.RaisePropertyChanged(nameof(HasAnyProfileNotice));
+            WriteAnimeJaNaiConf();
+        }
         public bool HasProfileMigrationNotice => ProfileMigrationNotice.Length>0;
+        public bool HasAnyProfileNotice => HasProfileMigrationNotice || HasEngineChangeNotice;
 
         private bool _showAdvancedSettings = false;
         [DataMember]
@@ -791,7 +847,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
 
         // Keep CONFIG_VERSION, the current default, and the historical-defaults set in sync with
         // aji_conf.cpp in the animejanai-inference repo (the native filter's conf loader).
-        private const int CONFIG_VERSION = 3;
+        private const int CONFIG_VERSION = 4;
         // [global] sub_render_mode value that selects the experimental GPU subtitle path. The
         // settings themselves live in the [subs-gpu] profile of the managed mpv-animejanai.conf,
         // so they can change with the player without a Manager release.
@@ -880,6 +936,8 @@ namespace AnimeJaNaiConfEditor.ViewModels
 
             // config_version drives migrations (absent => 1, the pre-versioning schema).
             int.TryParse(parser.GetValue("global", "config_version", "1"), out var configVersion);
+            // A newer Manager wrote this file: its meaning may have changed, so it is shown but never saved over.
+            if (autoSave) NewerConfiguration = configVersion > CONFIG_VERSION ? configVersion : 0;
             var trtEngineSettings = parser.GetValue("global", "trt_engine_settings", "");
             // v1 -> v2: drop a trt_engine_settings value that is just an old shipped default so the
             // current default applies; a genuinely customized value is kept.
@@ -905,34 +963,44 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 string number=match.Groups[1].Value;
                 var chains=ReadChains(parser,section.SectionName,autoSave,OnMac?animeJaNaiConf.AppleEngine:animeJaNaiConf.SelectedBackend.ToString(),animeJaNaiConf.RifeEngine);
                 slots[number]=new UpscaleSlot(autoSave){Vm=this,SlotNumber=number,MpvProfileName=$"upscale-on-{number}",
-                    ProfileName=parser.GetValue(section.SectionName,"profile_name","New Profile"),
-                    HdrStageControlled=ParseBool(parser.GetValue(section.SectionName,"hdr_stage_controlled","no"))||chains.Any(c=>c.Stages.Any(s=>s.Kind=="hdr")),Chains=chains};
+                    ProfileName=parser.GetValue(section.SectionName,"profile_name","New Profile"),Chains=chains};
             }
 
             animeJaNaiConf.UpscaleSlots = new AvaloniaList<UpscaleSlot>(slots.Values);
-            if(HdrSettings!=null&&OptionalSdks!=null)foreach(var profile in animeJaNaiConf.UpscaleSlots)MigrateLegacyHdr(profile);
+            ApplyDroppedHdrStages();
 
             return animeJaNaiConf;
         }
 
-        private void MigrateLegacyHdr(UpscaleSlot profile)
+        // Contract v2 (docs/CONTRAT-PROFILS-V2.md of the player): HDR is a global setting. An HDR
+        // stage read from an older profile file leaves its rule; the first enabled one becomes
+        // the global choice and the user is told once. Look values tuned inside a profile are
+        // not copied silently: the global look keeps its own values.
+        private readonly List<AnimeJaNai.Platform.InterpolationPipeline.Stage> _droppedHdr = new();
+        private bool _hdrMigrationNoticeShown;
+        internal void RegisterDroppedHdrStage(AnimeJaNai.Platform.InterpolationPipeline.Stage stage) => _droppedHdr.Add(stage);
+        private void ApplyDroppedHdrStages()
         {
-            if(profile.HdrStageControlled||profile.Chains.Any(c=>!c.PipelineEditable))return;
-            profile.HdrStageControlled=true;
-            if(HdrSettings.ConversionInProfiles||!HdrSettings.HdrConversion||profile.ProfileName=="New Profile"||profile.Chains.Count==0)return;
-            bool nvidia=HdrSettings.Backend=="rtx"||HdrSettings.Backend=="auto"&&_expectedBank.Contains("nvidia");
-            string method=nvidia&&(OnWindows||OnLinux&&OptionalSdks.TrueHdrReady)?"nvidia-truehdr":"mpv";
-            string runtime=method=="mpv"?"gpu-next":OnWindows?"rtx-video":"cuda";
-            var options=new Dictionary<string,string>{{"contrast",(HdrSettings.RtxContrast??100).ToString(ENGLISH_CULTURE)},
-                {"saturation",(HdrSettings.RtxSaturation??100).ToString(ENGLISH_CULTURE)},{"middle_gray",(HdrSettings.RtxMiddleGray??50).ToString(ENGLISH_CULTURE)}};
-            if(method!="mpv")options["peak"]=Math.Clamp(HdrSettings.Display.Peak??1000,400,2000).ToString(ENGLISH_CULTURE);
-            if(method=="mpv") {
-                options["mpv_truehdr_look"]=HdrSettings.MpvTrueHdrLook?"yes":"no";
-                options["paper_white"]=(HdrSettings.SdrWhite??203).ToString(ENGLISH_CULTURE);
-                options["highlights"]=(HdrSettings.HighlightsMpv??50).ToString(ENGLISH_CULTURE);
-                options["vibrance"]=(HdrSettings.VibranceMpv??15).ToString(ENGLISH_CULTURE);
-            } else if(OnLinux)options["sdk_root"]=OptionalSdks.TrueHdrRoot;
-            profile.Chains[0].Stages.Add(new InterpolationStage(profile.Chains[0],new("migrated-hdr","hdr",method,runtime,true,"",new(1,1),"quality",options)));
+            if (_droppedHdr.Count == 0 || HdrSettings is null) return;
+            var enabled = _droppedHdr.FirstOrDefault(s => s.Enabled);
+            string notice;
+            if (enabled is not null)
+            {
+                HdrSettings.HdrConversion = true;
+                HdrSettings.Backend = enabled.Method == "nvidia-truehdr" ? "rtx" : "mpv";
+                static string Value(IReadOnlyDictionary<string, string> o, string key, string fallback) => o.TryGetValue(key, out var v) ? v : fallback;
+                bool defaults = Value(enabled.Options, "contrast", "100") == "100" && Value(enabled.Options, "saturation", "100") == "100" && Value(enabled.Options, "middle_gray", "50") == "50";
+                string technology = enabled.Method == "nvidia-truehdr" ? "NVIDIA TrueHDR" : "mpv conversion";
+                notice = defaults
+                    ? $"HDR is now one global setting (Settings → HDR conversion): the HDR step found in your profiles became \"{technology}\" for every profile."
+                    : $"HDR is now one global setting (Settings → HDR conversion), set to \"{technology}\". The HDR step found in your profiles carried its own look (contrast {Value(enabled.Options, "contrast", "100")}, saturation {Value(enabled.Options, "saturation", "100")}); the global look keeps its own values. Adjust it in Settings if needed.";
+            }
+            else notice = "HDR is now one global setting (Settings → HDR conversion); the inactive HDR steps of your profiles were removed.";
+            _droppedHdr.Clear();
+            if (_hdrMigrationNoticeShown) return;
+            _hdrMigrationNoticeShown = true;
+            ProfileMigrationNotice = ProfileMigrationNotice.Length > 0 ? ProfileMigrationNotice + " " + notice : notice;
+            this.RaisePropertyChanged(nameof(ProfileMigrationNotice)); this.RaisePropertyChanged(nameof(HasProfileMigrationNotice)); this.RaisePropertyChanged(nameof(HasAnyProfileNotice));
         }
 
         private AvaloniaList<UpscaleChain> ReadChains(ConfigParser parser,string section,bool autoSave,string backend,string policy)
@@ -963,7 +1031,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             using var reading=System.Reactive.Disposables.Disposable.Create(()=>_profileReadDepth--);
             if(parser.Sections.Count()!=1||parser.Sections.First().SectionName!="slot")throw new InvalidDataException("Expected a single exported profile section.");
             var chains=ReadChains(parser,"slot",autoSave,OnMac?AnimeJaNaiConf.AppleEngine:AnimeJaNaiConf.SelectedBackend.ToString(),AnimeJaNaiConf.RifeEngine);
-            CurrentSlot.ProfileName=parser.GetValue("slot","profile_name","New Profile");CurrentSlot.HdrStageControlled=ParseBool(parser.GetValue("slot","hdr_stage_controlled","no"))||chains.Any(c=>c.Stages.Any(s=>s.Kind=="hdr"));CurrentSlot.Chains=chains;MigrateLegacyHdr(CurrentSlot);
+            CurrentSlot.ProfileName=parser.GetValue("slot","profile_name","New Profile");CurrentSlot.Chains=chains;ApplyDroppedHdrStages();
             reading.Dispose();if(autoSave)WriteAnimeJaNaiConf();
         }
 
@@ -972,9 +1040,25 @@ namespace AnimeJaNaiConfEditor.ViewModels
             return value?.ToLower() == "yes";
         }
 
+        // config_version of a file written by a newer Manager (0 otherwise): autosave is off.
+        private int _newerConfiguration;
+        public int NewerConfiguration
+        {
+            get => _newerConfiguration;
+            private set
+            {
+                this.RaiseAndSetIfChanged(ref _newerConfiguration, value);
+                this.RaisePropertyChanged(nameof(NewerConfigurationNotice)); this.RaisePropertyChanged(nameof(HasNewerConfigurationNotice));
+            }
+        }
+        public string NewerConfigurationNotice => NewerConfiguration > 0
+            ? $"This configuration was written by a newer AnimeJaNai Manager (format {NewerConfiguration}). It is shown as it is and changes are not saved: update the Manager to edit it."
+            : "";
+        public bool HasNewerConfigurationNotice => NewerConfiguration > 0;
         public void WriteAnimeJaNaiConf()
         {
             if (_profileReadDepth>0 || AnimeJaNaiConf?.UpscaleSlots.Any(s => s.Chains.Any(c => c.PipelineEditing)) == true) return;
+            if (NewerConfiguration > 0) return;
             foreach (var slot in AnimeJaNaiConf?.UpscaleSlots ?? [])
                 foreach (var chain in slot.Chains) chain.RefreshPipeline();
             try { WriteAnimeJaNaiConf(AnimeJaNaiConfPath); }
@@ -1000,8 +1084,6 @@ namespace AnimeJaNaiConfEditor.ViewModels
                         HdrSettings.NotifyPlayer();
                     }
                     else File.WriteAllText(fullPath, text);
-                    if(Path.GetFullPath(fullPath)==Path.GetFullPath(AnimeJaNaiConfPath)&&AnimeJaNaiConf.UpscaleSlots.All(p=>p.HdrStageControlled&&p.Chains.All(c=>c.PipelineEditable)))
-                        HdrSettings.RetireLegacyConversion();
                 }
                 finally { if (File.Exists(temp)) File.Delete(temp); }
             }
@@ -1059,9 +1141,8 @@ namespace AnimeJaNaiConfEditor.ViewModels
             {
                 var section = $"slot_{profile.SlotNumber}";
                 parser.SetValue(section, "profile_name", profile.ProfileName);
-                if(profile.HdrStageControlled)parser.SetValue(section,"hdr_stage_controlled","yes");
-
-                foreach (var chain in profile.Chains)
+                // A rule without a number never reaches the file (it was the chain__ phantom).
+                foreach (var chain in profile.Chains.Where(c => !string.IsNullOrEmpty(c.ChainNumber)))
                 {
                     parser.SetValue(section, $"chain_{chain.ChainNumber}_min_resolution", string.Create(ENGLISH_CULTURE, $"{chain.MinResolution}"));
                     parser.SetValue(section, $"chain_{chain.ChainNumber}_max_resolution", string.Create(ENGLISH_CULTURE, $"{chain.MaxResolution}"));
@@ -1083,13 +1164,11 @@ namespace AnimeJaNaiConfEditor.ViewModels
 
         public ConfigParser ParsedAnimeJaNaiProfileConf(UpscaleSlot slot)
         {
-            if(slot.Chains.Sum(c=>c.Stages.Count(s=>s.Kind=="hdr"))>1)throw new InvalidDataException("Only one HDR conversion stage is allowed per profile, across all its chains.");
             var parser = new ConfigParser();
             var section = "slot";
 
             parser.SetValue(section, "profile_name", slot.ProfileName);
-            if(slot.HdrStageControlled)parser.SetValue(section,"hdr_stage_controlled","yes");
-            foreach (var chain in slot.Chains)
+            foreach (var chain in slot.Chains.Where(c => !string.IsNullOrEmpty(c.ChainNumber)))
             {
                 parser.SetValue(section, $"chain_{chain.ChainNumber}_min_resolution", string.Create(ENGLISH_CULTURE, $"{chain.MinResolution}"));
                 parser.SetValue(section, $"chain_{chain.ChainNumber}_max_resolution", string.Create(ENGLISH_CULTURE, $"{chain.MaxResolution}"));
@@ -1572,11 +1651,14 @@ namespace AnimeJaNaiConfEditor.ViewModels
             string wanted = (value ?? "").Trim();
             AppleEngine = AppleEngines.FirstOrDefault(e => e.Equals(wanted, StringComparison.OrdinalIgnoreCase)) ?? "CoreML";
             SetAppleDevice(AppleDevice);
+            if (MainWindowViewModel.OnMac) Settled();
         }
 
         public void UserSelectAppleEngine(string engine)
         {
+            string previous = EngineRuntime;
             SetAppleEngine(engine);
+            Vm?.FollowEngine(previous, EngineRuntime);
             Vm?.RefreshComponentAwareness();
         }
 
@@ -1692,6 +1774,19 @@ namespace AnimeJaNaiConfEditor.ViewModels
         [DataMember]
         public bool AppleAutoProfile { get => _appleAutoProfile; set => this.RaiseAndSetIfChanged(ref _appleAutoProfile, value); }
 
+        // The engine the profiles' steps follow (lower-case runtime name), updated when a
+        // selection settles. Toggle bindings may set a flag before the selection command runs.
+        internal string EngineRuntime { get; private set; } = MainWindowViewModel.OnMac ? "coreml" : "tensorrt";
+        private void Settled() => EngineRuntime = (MainWindowViewModel.OnMac ? AppleEngine : SelectedBackend.ToString()).ToLowerInvariant();
+        private void UserSelect(Action select, bool refresh = true)
+        {
+            string previous = EngineRuntime;
+            BackendAutoFallback = false;
+            select();
+            Vm?.FollowEngine(previous, EngineRuntime);
+            if (refresh) Vm?.RefreshComponentAwareness();
+        }
+
         public void SetTensorRtSelected()
         {
             TensorRtSelected = true;
@@ -1699,6 +1794,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             VulkanSelected = false;
             MiGraphXSelected = false;
             OpenVinoSelected = false;
+            Settled();
         }
 
         public void SetDirectMlSelected()
@@ -1709,6 +1805,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             VulkanSelected = false;
             MiGraphXSelected = false;
             OpenVinoSelected = false;
+            Settled();
         }
 
         public void SetVulkanSelected()
@@ -1719,6 +1816,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             VulkanSelected = true;
             MiGraphXSelected = false;
             OpenVinoSelected = false;
+            Settled();
         }
 
         // openVino false = native MIGraphX (Windows/Linux); OpenVINO is Linux only.
@@ -1730,41 +1828,14 @@ namespace AnimeJaNaiConfEditor.ViewModels
             VulkanSelected = false;
             MiGraphXSelected = !openVino;
             OpenVinoSelected = openVino;
+            Settled();
         }
 
-        public void UserSelectMiGraphX()
-        {
-            BackendAutoFallback = false;
-            SetOnnxRuntimeSelected(false);
-            Vm?.RefreshComponentAwareness();
-        }
-
-        public void UserSelectOpenVino()
-        {
-            BackendAutoFallback = false;
-            SetOnnxRuntimeSelected(true);
-            Vm?.RefreshComponentAwareness();
-        }
-
-        public void UserSelectVulkan()
-        {
-            BackendAutoFallback = false;
-            SetVulkanSelected();
-            Vm?.RefreshComponentAwareness();
-        }
-
-        public void UserSelectTensorRt()
-        {
-            BackendAutoFallback = false;
-            SetTensorRtSelected();
-            Vm?.RefreshComponentAwareness();
-        }
-
-        public void UserSelectDirectMl()
-        {
-            BackendAutoFallback = false;
-            SetDirectMlSelected();
-        }
+        public void UserSelectMiGraphX() => UserSelect(() => SetOnnxRuntimeSelected(false));
+        public void UserSelectOpenVino() => UserSelect(() => SetOnnxRuntimeSelected(true));
+        public void UserSelectVulkan() => UserSelect(SetVulkanSelected);
+        public void UserSelectTensorRt() => UserSelect(SetTensorRtSelected);
+        public void UserSelectDirectMl() => UserSelect(SetDirectMlSelected, refresh: false);
 
         private bool _backendAutoFallback;
         [DataMember]
@@ -1879,7 +1950,19 @@ namespace AnimeJaNaiConfEditor.ViewModels
             set => this.RaiseAndSetIfChanged(ref _slotNumber, value);
         }
 
-        [DataMember] public bool HdrStageControlled { get; set; } = true;
+        // The computed result of the profile's first rule (what the player will produce).
+        public string ResultSummary => Chains.FirstOrDefault()?.ResultSummary ?? "";
+        public string ResultWarning => Chains.FirstOrDefault()?.ResultWarning ?? "";
+        public bool HasResultWarning => ResultWarning.Length > 0;
+        public bool HasRules => Chains.Count > 0;
+        public bool HasSeveralRules => Chains.Count > 1;
+        public string SampleSourceText => Chains.FirstOrDefault() is { } chain
+            ? $"For a {chain.SampleSource.Width}×{chain.SampleSource.Height} source at 23.976 fps" + (Chains.Count > 1 ? " (first rule)." : ".") + " The HDR conversion is a global setting (Settings)."
+            : "";
+        internal void RefreshSummary()
+        {
+            foreach (var name in new[] { nameof(ResultSummary), nameof(ResultWarning), nameof(HasResultWarning), nameof(HasRules), nameof(HasSeveralRules), nameof(SampleSourceText) }) this.RaisePropertyChanged(name);
+        }
 
         public bool ActiveSlot => (Vm?.ShowCustomProfiles ?? false) && SlotNumber == Vm?.SelectedSlotNumber;
 
@@ -1954,7 +2037,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         public string MinResolution
         {
             get => _minResolution;
-            set => this.RaiseAndSetIfChanged(ref _minResolution, value);
+            set { this.RaiseAndSetIfChanged(ref _minResolution, value); RuleChanged(); }
         }
 
         private string _maxResolution = "0x0";
@@ -1962,7 +2045,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         public string MaxResolution
         {
             get => _maxResolution;
-            set => this.RaiseAndSetIfChanged(ref _maxResolution, value);
+            set { this.RaiseAndSetIfChanged(ref _maxResolution, value); RuleChanged(); }
         }
 
         private string _minFps = 0.ToString();
@@ -1970,7 +2053,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         public string MinFps
         {
             get => _minFps;
-            set => this.RaiseAndSetIfChanged(ref _minFps, value);
+            set { this.RaiseAndSetIfChanged(ref _minFps, value); RuleChanged(); }
         }
 
         private string _maxFps = 0.ToString();
@@ -1978,7 +2061,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
         public string MaxFps
         {
             get => _maxFps;
-            set => this.RaiseAndSetIfChanged(ref _maxFps, value);
+            set { this.RaiseAndSetIfChanged(ref _maxFps, value); RuleChanged(); }
         }
 
     }

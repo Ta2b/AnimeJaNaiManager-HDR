@@ -27,16 +27,15 @@ namespace AnimeJaNaiConfEditor.ViewModels
         private readonly ConfLines _conf;
         private bool _loading;
         private bool _displayEdited;
-        private bool _conversionInProfiles;
-        public bool ConversionInProfiles => _conversionInProfiles;
+        private readonly string? _legacyVendor;
 
         public HdrSettings(string path, string? legacyVendor = null)
         {
             _path = path;
+            _legacyVendor = legacyVendor;
             _conf = ConfLines.Load(path);
             _loading = true;
             ReadValues(legacyVendor);
-            _conversionInProfiles=ParseBool(_conf.Get("conversion_in_profiles","no"));
             _loading = false;
 
             // Coalesce bursts (NumericUpDown spinning, toggle groups) into one write.
@@ -173,25 +172,29 @@ namespace AnimeJaNaiConfEditor.ViewModels
             set
             {
                 this.RaiseAndSetIfChanged(ref _hdrConversion, value);
-                this.RaisePropertyChanged(nameof(EnhancementControlsEnabled));
+                foreach (string name in new[] { nameof(EnhancementControlsEnabled), nameof(ModeOff), nameof(ModeMpv), nameof(ModeRtx), nameof(ModeSummary) }) this.RaisePropertyChanged(name);
             }
         }
 
-        private string _backend = "auto";
+        // hdr_backend: "mpv" (renderer tonemapping) or "rtx" (NVIDIA TrueHDR inside the engine on
+        // Linux, RTX Video on Windows). An older "auto" is resolved once by the GPU of the bank.
+        private string _backend = "mpv";
         public string Backend
         {
             get => _backend;
             set
             {
-                this.RaiseAndSetIfChanged(ref _backend, value);
-                this.RaisePropertyChanged(nameof(BackendAuto));
-                this.RaisePropertyChanged(nameof(BackendRtx));
-                this.RaisePropertyChanged(nameof(BackendMpv));
+                this.RaiseAndSetIfChanged(ref _backend, value == "rtx" ? "rtx" : "mpv");
+                foreach (string name in new[] { nameof(BackendRtx), nameof(BackendMpv), nameof(ModeOff), nameof(ModeMpv), nameof(ModeRtx), nameof(ModeSummary) }) this.RaisePropertyChanged(name);
             }
         }
-        public bool BackendAuto { get => Backend == "auto"; set { if (value) Backend = "auto"; else this.RaisePropertyChanged(); } }
         public bool BackendRtx { get => Backend == "rtx"; set { if (value) Backend = "rtx"; else this.RaisePropertyChanged(); } }
         public bool BackendMpv { get => Backend == "mpv"; set { if (value) Backend = "mpv"; else this.RaisePropertyChanged(); } }
+        // One three-way choice for the Settings page: off, renderer conversion, NVIDIA TrueHDR.
+        public bool ModeOff { get => !HdrConversion; set { if (value) HdrConversion = false; else this.RaisePropertyChanged(); } }
+        public bool ModeMpv { get => HdrConversion && Backend == "mpv"; set { if (value) { Backend = "mpv"; HdrConversion = true; } else this.RaisePropertyChanged(); } }
+        public bool ModeRtx { get => HdrConversion && Backend == "rtx"; set { if (value) { Backend = "rtx"; HdrConversion = true; } else this.RaisePropertyChanged(); } }
+        public string ModeSummary => !HdrConversion ? "Off: SDR video stays SDR." : Backend == "rtx" ? "NVIDIA TrueHDR converts SDR to HDR inside the engine, after the last step of every profile." : "The renderer converts SDR to HDR after the last step of every profile, on any GPU.";
 
         // ---------------------------------------------------------------- HDR enhancement
         private bool _enhance = true;
@@ -282,7 +285,7 @@ namespace AnimeJaNaiConfEditor.ViewModels
             SubtitleWhite = Number(_conf.Get("subtitle_white", "200"));
             HdrConversion = ParseBool(_conf.Get("hdr_conversion", "yes"));
             var backend = _conf.Get("hdr_backend", "auto").ToLowerInvariant();
-            Backend = backend is "rtx" or "mpv" ? backend : "auto";
+            Backend = backend is "rtx" or "mpv" ? backend : (legacyVendor ?? _legacyVendor) == "nvidia" ? "rtx" : "mpv";
             Enhance = ParseBool(_conf.Get("grade", "yes"));
             BlackDepth = Percent(_conf.Get("shadows", "0.15"));
             SdrWhite = Number(_conf.Get("paper_white", "203"));
@@ -292,12 +295,6 @@ namespace AnimeJaNaiConfEditor.ViewModels
             VibranceRtx = Percent(_conf.Get("vibrance_rtx", "0.10"));
             EnhanceNativeHdr = ParseBool(_conf.Get("grade_native_hdr", "no"));
             Display.Read(_conf, legacyVendor);
-        }
-
-        public void RetireLegacyConversion()
-        {
-            if(_conversionInProfiles)return;
-            _conversionInProfiles=true;Save();
         }
 
         private readonly object _saveLock = new();
@@ -311,29 +308,26 @@ namespace AnimeJaNaiConfEditor.ViewModels
                 _conf.Set("frame_generation", FrameGeneration);
                 _conf.Set("render_api", RenderApi);
                 _conf.Set("rtx_vsr_quality", ((int)(RtxVsrQuality ?? 2)).ToString(INV));
-                if(!_conversionInProfiles)_conf.Set("rtx_contrast", ((int)(RtxContrast ?? 100)).ToString(INV));
-                if(!_conversionInProfiles)_conf.Set("rtx_saturation", ((int)(RtxSaturation ?? 100)).ToString(INV));
-                if(!_conversionInProfiles)_conf.Set("rtx_middle_gray", ((int)(RtxMiddleGray ?? 50)).ToString(INV));
+                _conf.Set("rtx_contrast", ((int)(RtxContrast ?? 100)).ToString(INV));
+                _conf.Set("rtx_saturation", ((int)(RtxSaturation ?? 100)).ToString(INV));
+                _conf.Set("rtx_middle_gray", ((int)(RtxMiddleGray ?? 50)).ToString(INV));
                 _conf.Set("skip_held_frames", SkipHeldFrames ? "yes" : "no");
-                if(!_conversionInProfiles)_conf.Set("mpv_truehdr_look", MpvTrueHdrLook ? "yes" : "no");
+                _conf.Set("mpv_truehdr_look", MpvTrueHdrLook ? "yes" : "no");
                 _conf.Set("rife_display_sync", RifeDisplaySync ? "yes" : "no");
                 if (MainWindowViewModel.OnLinux || _conf.Get("smooth_motion", "") != "") _conf.Set("smooth_motion", SmoothMotion ? "yes" : "no");
                 _conf.Set("rife_max_factor", ((int)(RifeMaxFactor ?? 2)).ToString(INV));
                 _conf.Set("subtitle_white", ((int)(SubtitleWhite ?? 200)).ToString(INV));
-                if(!_conversionInProfiles)_conf.Set("hdr_conversion", HdrConversion ? "yes" : "no");
-                if(!_conversionInProfiles)_conf.Set("hdr_backend", Backend);
+                _conf.Set("hdr_conversion", HdrConversion ? "yes" : "no");
+                _conf.Set("hdr_backend", Backend);
+                _conf.Remove("conversion_in_profiles"); // retired with contract v2: the conversion is global
                 _conf.Set("grade", Enhance ? "yes" : "no");
                 _conf.Set("shadows", Fraction(BlackDepth));
-                if(!_conversionInProfiles)_conf.Set("paper_white", ((int)(SdrWhite ?? 203)).ToString(INV));
-                if(!_conversionInProfiles)_conf.Set("highlights", Fraction(HighlightsMpv));
+                _conf.Set("paper_white", ((int)(SdrWhite ?? 203)).ToString(INV));
+                _conf.Set("highlights", Fraction(HighlightsMpv));
                 _conf.Set("highlights_rtx", Fraction(HighlightsRtx));
-                if(!_conversionInProfiles)_conf.Set("vibrance", Fraction(VibranceMpv));
+                _conf.Set("vibrance", Fraction(VibranceMpv));
                 _conf.Set("vibrance_rtx", Fraction(VibranceRtx));
                 _conf.Set("grade_native_hdr", EnhanceNativeHdr ? "yes" : "no");
-                if(_conversionInProfiles) {
-                    foreach(string key in new[]{"rtx_contrast","rtx_saturation","rtx_middle_gray","mpv_truehdr_look","hdr_conversion","hdr_backend","paper_white","highlights","vibrance"})_conf.Remove(key);
-                    _conf.Set("conversion_in_profiles","yes");
-                }
                 Display.Write(_conf);
                 try
                 {

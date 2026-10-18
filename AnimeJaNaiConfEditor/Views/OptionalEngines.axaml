@@ -1,29 +1,24 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:AnimeJaNaiConfEditor.ViewModels" x:Class="AnimeJaNaiConfEditor.Views.OptionalEngines" x:DataType="vm:MainWindowViewModel">
   <StackPanel Spacing="16">
-    <Border Classes="card" Padding="20">
+    <Border Classes="card" Padding="20" IsVisible="{Binding LinuxFeatures}">
       <StackPanel Spacing="12">
-        <TextBlock Classes="section-title" Text="HDR conversion" />
-        <TextBlock Text="mpv HDR is included. Add one HDR step to a profile and choose its technology there." TextWrapping="Wrap"/>
-        <Expander Header="Optional: NVIDIA TrueHDR">
-          <StackPanel Spacing="12" Margin="0,12,0,0">
-            <TextBlock Name="TrueHdrSdkStatus" Text="{Binding OptionalSdks.TrueHdrStatus}" TextWrapping="Wrap" />
-            <TextBlock Classes="muted" Text="On Linux, download the Maxine VideoFX Core and TrueHDR feature archives from NVIDIA. Import both here, in either order. The Manager installs their runtime files without manual paths. Windows uses its packaged RTX Video runtime." TextWrapping="Wrap" />
-            <WrapPanel>
-              <Button Content="1. NVIDIA download guide" Command="{Binding OptionalSdks.OpenTrueHdrDownload}" Margin="0,0,8,8" />
-              <Button Name="ImportTrueHdrSdk" Content="2. Import SDK archives…" Click="ImportTrueHdrSdkClick" IsEnabled="{Binding OptionalSdks.CanImport}" Margin="0,0,8,8"/>
-            </WrapPanel>
-            <ProgressBar IsIndeterminate="True" IsVisible="{Binding OptionalSdks.IsTrueHdrBusy}" />
-            <Button Content="Cancel import" Command="{Binding OptionalSdks.Cancel}" IsVisible="{Binding OptionalSdks.IsTrueHdrBusy}" HorizontalAlignment="Left" />
-            <TextBlock Text="{Binding OptionalSdks.TrueHdrImportStatus}" TextWrapping="Wrap" />
-          </StackPanel>
-        </Expander>
+        <TextBlock Classes="section-title" Text="NVIDIA TrueHDR SDK (optional)" />
+        <TextBlock Text="TrueHDR converts SDR to HDR inside the engine. The choice itself is made in Settings → HDR conversion; this is where its SDK is installed." TextWrapping="Wrap"/>
+        <TextBlock Name="TrueHdrSdkStatus" Text="{Binding OptionalSdks.TrueHdrStatus}" TextWrapping="Wrap" />
+        <TextBlock Classes="muted" Text="Download the Maxine VideoFX Core and the TrueHDR feature archives from NVIDIA, then import both here, in either order. The Manager installs their runtime files; no manual path is needed." TextWrapping="Wrap" />
+        <WrapPanel>
+          <Button Content="1. NVIDIA download guide" Command="{Binding OptionalSdks.OpenTrueHdrDownload}" Margin="0,0,8,8" />
+          <Button Name="ImportTrueHdrSdk" Content="2. Import SDK archives…" Click="ImportTrueHdrSdkClick" IsEnabled="{Binding OptionalSdks.CanImport}" Margin="0,0,8,8"/>
+        </WrapPanel>
+        <ProgressBar IsIndeterminate="True" IsVisible="{Binding OptionalSdks.IsTrueHdrBusy}" />
+        <Button Content="Cancel import" Command="{Binding OptionalSdks.Cancel}" IsVisible="{Binding OptionalSdks.IsTrueHdrBusy}" HorizontalAlignment="Left" />
+        <TextBlock Text="{Binding OptionalSdks.TrueHdrImportStatus}" TextWrapping="Wrap" />
       </StackPanel>
     </Border>
-    <Border Classes="card" Padding="20">
-      <StackPanel Spacing="12">
-        <TextBlock Classes="section-title" Text="GMFSS Fortuna · video preparation"/>
+    <Expander Name="PreparationEngineExpander" Header="GMFSS Fortuna · video preparation engine" HorizontalAlignment="Stretch" IsExpanded="{Binding PreparationEngineExpanded, Mode=TwoWay}">
+      <StackPanel Spacing="12" Margin="12">
         <TextBlock Text="{Binding Preparation.MethodNotice}" TextWrapping="Wrap"/>
-        <TextBlock Classes="muted" Text="This engine prepares a new video file before playback. Its settings are separate from the real-time processing profile." TextWrapping="Wrap"/>
+        <TextBlock Classes="muted" Text="This engine prepares a new video file before playback (Prepare a video). Its settings are separate from the real-time profiles." TextWrapping="Wrap"/>
         <StackPanel IsEnabled="{Binding Preparation.NotBusy}" Spacing="8">
           <TextBlock Text="Python executable"/><Grid ColumnDefinitions="*,Auto"><TextBox Name="PreparationPython" Text="{Binding Preparation.Python}" PlaceholderText="Python with PyTorch, CUDA and CuPy"/><Button Grid.Column="1" Content="Browse…" Click="PythonClick" Margin="8,0,0,0"/></Grid>
           <TextBlock Text="GMFSS source folder"/><Grid ColumnDefinitions="*,Auto"><TextBox Name="PreparationModel" Text="{Binding Preparation.ModelSource}" PlaceholderText="Official pinned GMFSS Fortuna source (0fb7ac1)"/><Button Grid.Column="1" Content="Browse…" Click="ModelClick" Margin="8,0,0,0"/></Grid>
@@ -38,8 +33,10 @@
         <TextBlock Classes="muted" Text="Source and model identities are checked before export. Runtime files and model weights are not downloaded automatically." TextWrapping="Wrap"/>
         <TextBlock Text="{Binding Preparation.EngineStatus}" TextWrapping="Wrap"/>
       </StackPanel>
-    </Border>
-    <Button Content="Refresh installed engines" Command="{Binding OptionalSdks.Refresh}" HorizontalAlignment="Left"/>
-    <TextBlock Text="{Binding OptionalSdks.Status}" TextWrapping="Wrap"/>
+    </Expander>
+    <WrapPanel>
+      <Button Content="Refresh installed modules" Command="{Binding OptionalSdks.Refresh}" Margin="0,0,8,8"/>
+      <TextBlock Text="{Binding OptionalSdks.Status}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+    </WrapPanel>
   </StackPanel>
 </UserControl>

@@ -43,12 +43,40 @@
       </Grid>
     </Border>
     <Grid Grid.Column="1" Name="PageHost" Margin="28,24,28,20">
+
+      <!-- ============================== Profiles ============================== -->
       <Grid Name="ProfilesPage" IsVisible="{Binding ProfilesSelected}" RowDefinitions="Auto,Auto,*">
-        <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,22">
-          <StackPanel Spacing="4"><TextBlock Text="Profiles" Classes="page-title"/><TextBlock Text="Choose a look. Build the processing steps in their playback order." Classes="muted" TextWrapping="Wrap"/></StackPanel>
-          <Button Name="NewProfileButton" Grid.Column="1" Content="New profile" Classes="accent" Command="{Binding AddProfile}" IsEnabled="{Binding CanAddProfile}" Margin="16,0,0,0" VerticalAlignment="Top"/>
+        <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,18">
+          <StackPanel Spacing="4"><TextBlock Text="Profiles" Classes="page-title"/><TextBlock Text="A profile is what the player does to a video: its steps, in order, and the result they produce." Classes="muted" TextWrapping="Wrap"/></StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="16,0,0,0" VerticalAlignment="Top">
+            <Button Name="RecommendedProfilesButton" Content="Add recommended profiles" Classes="secondary" Command="{Binding AddRecommendedProfiles}" IsEnabled="{Binding CanAddProfile}" ToolTip.Tip="{Binding RecommendedProfilesHint}"/>
+            <Button Name="NewProfileButton" Content="New profile" Classes="accent" Command="{Binding AddProfile}" IsEnabled="{Binding CanAddProfile}"/>
+          </StackPanel>
         </Grid>
-        <TextBlock Grid.Row="1" Name="ProfileMigrationNotice" Text="{Binding ProfileMigrationNotice}" IsVisible="{Binding HasProfileMigrationNotice}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+        <StackPanel Grid.Row="1" Spacing="8" Margin="0,0,0,14">
+          <Border Name="ComponentSetupNotice" Classes="warning-card" IsVisible="{Binding ComponentManager.SetupNeeded}">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+              <materialIcons:MaterialIcon Kind="DownloadOutline" Width="20" Height="20" VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center" Text="Components recommended for this computer are not installed yet. Steps that need them show as Blocked until then."/>
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                <Button Content="Install recommended" Classes="accent" Command="{Binding InstallRecommendedComponents}" IsEnabled="{Binding ComponentManager.NotBusy}"/>
+                <Button Content="Details" Classes="secondary" Command="{Binding ShowEngines}"/>
+              </StackPanel>
+            </Grid>
+          </Border>
+          <Border Classes="notice-card" IsVisible="{Binding HasProfileMigrationNotice}">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+              <materialIcons:MaterialIcon Kind="InformationOutline" Width="20" Height="20" VerticalAlignment="Top"/>
+              <TextBlock Grid.Column="1" Name="ProfileMigrationNotice" Text="{Binding ProfileMigrationNotice}" TextWrapping="Wrap"/>
+            </Grid>
+          </Border>
+          <Border Classes="notice-card" IsVisible="{Binding HasEngineChangeNotice}">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+              <materialIcons:MaterialIcon Kind="Chip" Width="20" Height="20" VerticalAlignment="Top"/>
+              <TextBlock Grid.Column="1" Text="{Binding EngineChangeNotice}" TextWrapping="Wrap"/>
+            </Grid>
+          </Border>
+        </StackPanel>
         <Grid Grid.Row="2" Name="ProfileWorkspace" ColumnDefinitions="216,*">
           <Border Name="ProfileSidebar" Classes="section-card" Margin="0,0,20,0" Padding="8,12">
             <Grid RowDefinitions="Auto,*,Auto">
@@ -57,7 +85,7 @@
                 <ItemsControl ItemsSource="{Binding VisibleProfiles}">
                   <ItemsControl.ItemTemplate><DataTemplate x:DataType="vm:UpscaleSlot">
                     <Button Classes="profile-item" Classes.selected="{Binding ActiveSlot}" Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).HandleShowCustomProfile}" CommandParameter="{Binding SlotNumber}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Margin="0,2">
-                      <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding ProfileName}" TextTrimming="CharacterEllipsis"/><materialIcons:MaterialIcon Grid.Column="1" Kind="Star" Width="14" Height="14" IsVisible="{Binding IsSelectedMpvProfile}" Margin="8,0,0,0" ToolTip.Tip="Startup profile"/></Grid>
+                      <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding ProfileName}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/><materialIcons:MaterialIcon Grid.Column="1" Kind="Star" Width="14" Height="14" IsVisible="{Binding IsSelectedMpvProfile}" Margin="8,0,0,0" ToolTip.Tip="Startup profile"/></Grid>
                     </Button>
                   </DataTemplate></ItemsControl.ItemTemplate>
                 </ItemsControl>
@@ -66,12 +94,20 @@
             </Grid>
           </Border>
           <ScrollViewer Name="ProfileEditorScroll" Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Spacing="18">
+            <StackPanel Spacing="16">
               <ComboBox Name="CompactProfilePicker" IsVisible="False" ItemsSource="{Binding VisibleProfiles}" SelectedItem="{Binding SelectedProfile}" HorizontalAlignment="Stretch" PlaceholderText="Choose a profile">
                 <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:UpscaleSlot"><TextBlock Text="{Binding ProfileName}" TextTrimming="CharacterEllipsis"/></DataTemplate></ComboBox.ItemTemplate>
               </ComboBox>
               <Border Classes="section-card" IsVisible="{Binding !HasSelectedProfile}" Padding="28">
-                <StackPanel Spacing="12"><materialIcons:MaterialIcon Kind="LayersOutline" Width="32" Height="32" HorizontalAlignment="Left"/><TextBlock Text="Your first profile starts here" Classes="heading"/><TextBlock Text="Add interpolation, upscale, downscale or HDR. Each step keeps its own technology and settings." Classes="muted" TextWrapping="Wrap"/><Button Content="Create a profile" Classes="accent" Command="{Binding AddProfile}" IsEnabled="{Binding CanAddProfile}" HorizontalAlignment="Left"/></StackPanel>
+                <StackPanel Spacing="12">
+                  <materialIcons:MaterialIcon Kind="LayersOutline" Width="32" Height="32" HorizontalAlignment="Left"/>
+                  <TextBlock Text="Your first profile starts here" Classes="heading"/>
+                  <TextBlock Text="Start from the recommended profiles for your engine, or build your own: upscale, interpolation, downscale. Each step keeps its own technology and settings." Classes="muted" TextWrapping="Wrap"/>
+                  <WrapPanel>
+                    <Button Content="Add recommended profiles" Classes="accent" Command="{Binding AddRecommendedProfiles}" IsEnabled="{Binding CanAddProfile}" Margin="0,0,8,8"/>
+                    <Button Content="Create an empty profile" Classes="secondary" Command="{Binding AddProfile}" IsEnabled="{Binding CanAddProfile}" Margin="0,0,0,8"/>
+                  </WrapPanel>
+                </StackPanel>
               </Border>
               <StackPanel IsVisible="{Binding HasSelectedProfile}" Spacing="16">
                 <Border Classes="section-card" Padding="20">
@@ -82,27 +118,31 @@
                       <Button Name="DefaultProfileButton" Command="{Binding SelectDefaultProfile}" Classes="secondary" Margin="0,0,8,8" IsVisible="{Binding MpvConfDetected}">
                         <StackPanel Orientation="Horizontal" Spacing="7"><materialIcons:MaterialIcon Kind="StarOutline" Width="17" Height="17"/><TextBlock Text="{Binding DefaultProfileAction}"/></StackPanel>
                       </Button>
-                      <Button Content="Profile actions" Classes="secondary" Margin="0,0,0,8">
-                        <Button.Flyout><Flyout><StackPanel Spacing="6" MinWidth="180">
-                          <Button Content="Duplicate profile" Command="{Binding DuplicateProfile}" IsEnabled="{Binding CanAddProfile}" HorizontalAlignment="Stretch"/>
-                          <Button Content="Import into this profile…" Click="ImportCurrentProfileConfButtonClick" HorizontalAlignment="Stretch"/>
-                          <Button Content="Export profile…" Click="ExportCurrentProfileConfButtonClick" HorizontalAlignment="Stretch"/>
-                          <Separator Margin="0,4"/>
-                          <Button Content="Delete profile…" Click="DeleteProfileButtonClick" HorizontalAlignment="Stretch"/>
-                        </StackPanel></Flyout></Button.Flyout>
-                      </Button>
+                      <Button Content="Duplicate" Classes="secondary" Command="{Binding DuplicateProfile}" IsEnabled="{Binding CanAddProfile}" Margin="0,0,8,8"/>
+                      <Button Content="Import…" Classes="secondary" Click="ImportCurrentProfileConfButtonClick" Margin="0,0,8,8"/>
+                      <Button Content="Export…" Classes="secondary" Click="ExportCurrentProfileConfButtonClick" Margin="0,0,8,8"/>
+                      <Button Content="Delete…" Classes="secondary" Click="DeleteProfileButtonClick" Margin="0,0,0,8"/>
                     </WrapPanel>
-                    <TextBlock Text="{Binding ProfileOverview}" Classes="muted" TextWrapping="Wrap"/>
+                  </StackPanel>
+                </Border>
+                <Border Name="ProfileResultCard" Classes="section-card result-card" Padding="20" IsVisible="{Binding CurrentSlot.HasRules}">
+                  <StackPanel Spacing="8">
+                    <TextBlock Text="WHAT THIS PROFILE DOES" Classes="muted" FontSize="10" LetterSpacing="1.2"/>
+                    <TextBlock Name="ProfileResultSummary" Text="{Binding CurrentSlot.ResultSummary}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                    <TextBlock Classes="help" Text="{Binding CurrentSlot.SampleSourceText}" TextWrapping="Wrap"/>
+                    <Border Classes="warning-card" IsVisible="{Binding CurrentSlot.HasResultWarning}">
+                      <TextBlock Name="ProfileResultWarning" Text="{Binding CurrentSlot.ResultWarning}" TextWrapping="Wrap"/>
+                    </Border>
                   </StackPanel>
                 </Border>
                 <ItemsControl ItemsSource="{Binding CurrentSlot.Chains}">
                   <ItemsControl.ItemTemplate><DataTemplate x:DataType="vm:UpscaleChain">
                     <StackPanel Spacing="12" Margin="0,0,0,20">
-                      <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding ChainNumber, StringFormat=Processing rule {0}}" Classes="heading"/><Button Grid.Column="1" Content="Remove rule" Classes="secondary" Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).DeleteChain}" CommandParameter="{Binding}"/></Grid>
+                      <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).CurrentSlot.HasSeveralRules}"><TextBlock Text="{Binding RuleTitle}" Classes="heading"/><Button Grid.Column="1" Content="Remove rule" Classes="secondary" Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).DeleteChain}" CommandParameter="{Binding}"/></Grid>
                       <views:InterpolationStages/>
-                      <Expander Header="When to use this rule" IsExpanded="False" HorizontalAlignment="Stretch">
+                      <Expander Header="When this rule applies" IsExpanded="False" HorizontalAlignment="Stretch">
                         <StackPanel Spacing="12" Margin="12">
-                          <TextBlock Text="All videos match when maximum values are zero. If several rules match, their order determines which one is used." Classes="muted" TextWrapping="Wrap"/>
+                          <TextBlock Text="A rule applies to videos whose size and frame rate fall in these ranges. Zero means no limit. The first matching rule wins." Classes="muted" TextWrapping="Wrap"/>
                           <TextBlock Text="Video resolution (width × height)"/>
                           <WrapPanel><ui:FAComboBox IsEditable="True" Width="140" Text="{Binding MinResolution, Mode=TwoWay}" ItemsSource="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).CommonResolutions}"/><TextBlock Text="to" Margin="10,0"/><ui:FAComboBox IsEditable="True" Width="140" Text="{Binding MaxResolution, Mode=TwoWay}" ItemsSource="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).CommonResolutions}"/></WrapPanel>
                           <TextBlock Text="Source frame rate"/>
@@ -112,7 +152,7 @@
                     </StackPanel>
                   </DataTemplate></ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <Expander Header="Add another activation rule" HorizontalAlignment="Stretch" IsExpanded="False">
+                <Expander Header="Add another rule" HorizontalAlignment="Stretch" IsExpanded="False">
                   <StackPanel Margin="12" Spacing="10"><TextBlock Classes="muted" TextWrapping="Wrap" Text="Use a separate processing chain for another source resolution or frame rate. A single rule is enough for most profiles."/><Button Content="Add rule" Command="{Binding AddChain}" HorizontalAlignment="Left"/></StackPanel>
                 </Expander>
               </StackPanel>
@@ -120,135 +160,152 @@
           </ScrollViewer>
         </Grid>
       </Grid>
+
+      <!-- ============================== Prepare a video ============================== -->
       <Grid Name="PreparationPage" IsVisible="{Binding PreparationSelected}"><views:Preparation DataContext="{Binding Preparation}"/></Grid>
+
+      <!-- ============================== Engines ============================== -->
       <ScrollViewer Name="EnginesPage" IsVisible="{Binding EnginesSelected}" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Spacing="18" MaxWidth="1100" HorizontalAlignment="Stretch">
-          <StackPanel Spacing="4"><TextBlock Text="Engines and components" Classes="page-title"/><TextBlock Text="Install what you need, then choose the technology inside each profile step." Classes="muted" TextWrapping="Wrap"/></StackPanel>
-<Border Classes="border">
-              <StackPanel Spacing="10">
-                <TextBlock Text="Playback engine" FontWeight="SemiBold" FontSize="16" />
-                <WrapPanel IsVisible="{Binding NotMacFeatures}">
-                  <TextBlock Text="Inference engine" Margin="0,0,12,0" VerticalAlignment="Center" />
-                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TensorRtSelected}" Content="TensorRT" Command="{Binding AnimeJaNaiConf.UserSelectTensorRt}" IsEnabled="{Binding TrtSelectable}" />
-                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.VulkanSelected}" Content="Vulkan" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding VulkanSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectVulkan}" />
-                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.MiGraphXSelected}" Content="MIGraphX + HIP" IsVisible="{Binding NotMacFeatures}" IsEnabled="{Binding MiGraphXSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectMiGraphX}" />
-                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.OpenVinoSelected}" Content="OpenVINO" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding OpenVinoSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectOpenVino}" />
-                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.DirectMlSelected}" Content="DirectML" IsEnabled="{Binding WindowsFeatures}" Command="{Binding AnimeJaNaiConf.UserSelectDirectMl}" />
+          <StackPanel Spacing="4"><TextBlock Text="Engines and components" Classes="page-title"/><TextBlock Text="The engine that runs your profiles, and the components it needs on this computer." Classes="muted" TextWrapping="Wrap"/></StackPanel>
+          <Border Classes="border">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Inference engine" FontWeight="SemiBold" FontSize="16" />
+              <WrapPanel IsVisible="{Binding NotMacFeatures}">
+                <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TensorRtSelected}" Content="TensorRT" Command="{Binding AnimeJaNaiConf.UserSelectTensorRt}" IsEnabled="{Binding TrtSelectable}" />
+                <ToggleButton IsChecked="{Binding AnimeJaNaiConf.VulkanSelected}" Content="Vulkan" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding VulkanSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectVulkan}" />
+                <ToggleButton IsChecked="{Binding AnimeJaNaiConf.MiGraphXSelected}" Content="MIGraphX + HIP" IsVisible="{Binding NotMacFeatures}" IsEnabled="{Binding MiGraphXSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectMiGraphX}" />
+                <ToggleButton IsChecked="{Binding AnimeJaNaiConf.OpenVinoSelected}" Content="OpenVINO" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding OpenVinoSelectable}" Command="{Binding AnimeJaNaiConf.UserSelectOpenVino}" />
+                <ToggleButton IsChecked="{Binding AnimeJaNaiConf.DirectMlSelected}" Content="DirectML" IsEnabled="{Binding WindowsFeatures}" Command="{Binding AnimeJaNaiConf.UserSelectDirectMl}" />
+              </WrapPanel>
+              <StackPanel Name="AppleSettingsPanel" IsVisible="{Binding MacFeatures}" Spacing="10">
+                <WrapPanel>
+                  <TextBlock Text="Inference engine" Width="200" VerticalAlignment="Center" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleOrtSelected}" Content="Core ML (ONNX Runtime)" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleCoreMlSelected}" Content="Core ML (native)" IsEnabled="{Binding AppleCoreMlSelectable}" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleMetalSelected}" Content="Metal" IsEnabled="{Binding AppleMetalSelectable}" />
                 </WrapPanel>
-                <StackPanel Name="AppleSettingsPanel" IsVisible="{Binding MacFeatures}" Spacing="10">
-                  <WrapPanel>
-                    <TextBlock Text="Inference engine" Width="200" VerticalAlignment="Center" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleOrtSelected}" Content="Core ML (ONNX Runtime)" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleCoreMlSelected}" Content="Core ML (native)" IsEnabled="{Binding AppleCoreMlSelectable}" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleMetalSelected}" Content="Metal" IsEnabled="{Binding AppleMetalSelectable}" />
-                  </WrapPanel>
-                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="Three engines run the same models. Core ML (ONNX Runtime) is the first one shipped. Core ML (native) gives Core ML the pictures directly, as 8-bit images. Metal runs the network on the GPU without Core ML. Run Benchmarks measures all three on this Mac." />
-                  <WrapPanel>
-                    <TextBlock Text="Compute target" Width="200" VerticalAlignment="Center" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceAuto}" Content="Auto" IsEnabled="{Binding AnimeJaNaiConf.AppleDeviceChoice}" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceGpu}" Content="GPU" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceNpu}" Content="Neural Engine (NPU)" IsEnabled="{Binding AnimeJaNaiConf.AppleDeviceChoice}" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceCpu}" Content="CPU" IsEnabled="{Binding AnimeJaNaiConf.AppleDeviceChoice}" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceGpuNpu}" Content="GPU + Neural Engine" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceGpuNpuCpu}" Content="GPU + Neural Engine + CPU" />
-                  </WrapPanel>
-                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="{Binding AnimeJaNaiConf.AppleDeviceNote}" />
-                  <WrapPanel>
-                    <TextBlock Text="Reuse unchanged pictures" Width="200" VerticalAlignment="Center" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.EngineReuseOff}" Content="Off" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.EngineReuseFrame}" Content="Whole frames" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.EngineReuseTiles}" Content="Areas of the frame" />
-                  </WrapPanel>
-                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="Anime holds a drawing for several frames and often moves only part of the picture. Whole frames: a frame identical to the last computed one keeps its result. Areas of the frame: when only a part of the picture changed (a mouth, a blink), only the areas that changed are computed; a frame where everything moves is computed whole." />
-                  <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.EngineBoost}" IsEnabled="{Binding AnimeJaNaiConf.EngineBoostChoice}" Content="Balanced model on drawings that stay on screen (experimental)" />
-                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="With a Performance profile and whole-frame reuse: a drawing held for several frames is computed once, with the Balanced model of the same family when the time it stays on screen covers it. Motion stays on the Performance model. Not applied to profiles that interpolate. Ctrl+J shows how often it is used." />
-                  <WrapPanel>
-                    <TextBlock Text="RIFE interpolation on" Width="200" VerticalAlignment="Center" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeDeviceAuto}" Content="Auto" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeDeviceGpu}" Content="GPU" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeDeviceNpu}" Content="Neural Engine (NPU)" />
-                    <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeDeviceCpu}" Content="CPU" />
-                  </WrapPanel>
-                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="RIFE is enabled per profile (Profiles). Core ML runs it, on the processor chosen here, whichever engine upscales. Interpolating before the upscale costs less: the pictures between two frames are computed at the source size, then upscaled like a frame. Two identical frames (a held drawing) and scene cuts are not interpolated." />
-                  <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.AppleAutoProfile}" Content="Move to a lighter profile when this Mac cannot keep up with the video" />
-                  <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="The player measures the time spent on each frame and remembers the profile this Mac holds; Ctrl+R in the player forgets it and measures again, Ctrl+J shows the timings and where the model runs. Choose the startup profile in Profiles." />
-                </StackPanel>
-                <TextBlock Classes="help" IsVisible="{Binding NotMacFeatures}" Text="Engines that this GPU cannot use are greyed. TensorRT: NVIDIA. DirectML: Windows. Vulkan: Linux, any GPU. MIGraphX + HIP: AMD on Windows/Linux with the native engine and compatible runtime. OpenVINO: Intel on Linux. Choose the startup profile in Profiles; restart playback after changing the engine." />
-                <TextBlock TextWrapping="Wrap" Foreground="Orange" IsVisible="{Binding HasBackendNotice}" Text="{Binding BackendNotice}" />
+                <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="Three engines run the same models. Core ML (ONNX Runtime) is the first one shipped. Core ML (native) gives Core ML the pictures directly, as 8-bit images. Metal runs the network on the GPU without Core ML. Run Benchmarks measures all three on this Mac." />
+                <WrapPanel>
+                  <TextBlock Text="Compute target" Width="200" VerticalAlignment="Center" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceAuto}" Content="Auto" IsEnabled="{Binding AnimeJaNaiConf.AppleDeviceChoice}" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceGpu}" Content="GPU" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceNpu}" Content="Neural Engine (NPU)" IsEnabled="{Binding AnimeJaNaiConf.AppleDeviceChoice}" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceCpu}" Content="CPU" IsEnabled="{Binding AnimeJaNaiConf.AppleDeviceChoice}" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceGpuNpu}" Content="GPU + Neural Engine" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.AppleDeviceGpuNpuCpu}" Content="GPU + Neural Engine + CPU" />
+                </WrapPanel>
+                <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="{Binding AnimeJaNaiConf.AppleDeviceNote}" />
+                <WrapPanel>
+                  <TextBlock Text="Reuse unchanged pictures" Width="200" VerticalAlignment="Center" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.EngineReuseOff}" Content="Off" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.EngineReuseFrame}" Content="Whole frames" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.EngineReuseTiles}" Content="Areas of the frame" />
+                </WrapPanel>
+                <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="Anime holds a drawing for several frames and often moves only part of the picture. Whole frames: a frame identical to the last computed one keeps its result. Areas of the frame: when only a part of the picture changed (a mouth, a blink), only the areas that changed are computed; a frame where everything moves is computed whole." />
+                <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.EngineBoost}" IsEnabled="{Binding AnimeJaNaiConf.EngineBoostChoice}" Content="Balanced model on drawings that stay on screen (experimental)" />
+                <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="With a Performance profile and whole-frame reuse: a drawing held for several frames is computed once, with the Balanced model of the same family when the time it stays on screen covers it. Motion stays on the Performance model. Not applied to profiles that interpolate. Ctrl+J shows how often it is used." />
+                <WrapPanel>
+                  <TextBlock Text="RIFE interpolation on" Width="200" VerticalAlignment="Center" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeDeviceAuto}" Content="Auto" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeDeviceGpu}" Content="GPU" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeDeviceNpu}" Content="Neural Engine (NPU)" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeDeviceCpu}" Content="CPU" />
+                </WrapPanel>
+                <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="RIFE is enabled per profile (Profiles). Core ML runs it, on the processor chosen here, whichever engine upscales. Interpolating before the upscale costs less: the pictures between two frames are computed at the source size, then upscaled like a frame. Two identical frames (a held drawing) and scene cuts are not interpolated." />
+                <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.AppleAutoProfile}" Content="Move to a lighter profile when this Mac cannot keep up with the video" />
+                <TextBlock Classes="help" TextWrapping="Wrap" MaxLines="6" Text="The player measures the time spent on each frame and remembers the profile this Mac holds; Ctrl+R in the player forgets it and measures again, Ctrl+J shows the timings and where the model runs. Choose the startup profile in Profiles." />
               </StackPanel>
-            </Border>
-<StackPanel Spacing="12" IsVisible="{Binding NotMacFeatures}">
-        <TextBlock Text="{Binding ComponentManager.GpuText}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
-        <Border Classes="border" IsVisible="{Binding ComponentManager.SetupNeeded}">
-          <Grid ColumnDefinitions="Auto,*">
-            <materialIcons:MaterialIcon Grid.Column="0" Kind="AlertCircleOutline" Width="20" Height="20" Foreground="Orange" VerticalAlignment="Top" Margin="0,2,8,0"/>
-            <TextBlock Grid.Column="1" TextWrapping="Wrap" Text="Components recommended for this PC are not installed. Check the highlighted items below, then click Apply changes to install them."/>
-          </Grid>
-        </Border>
-        <ItemsControl ItemsSource="{Binding ComponentManager.Packs}" IsEnabled="{Binding ComponentManager.NotBusy}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:ComponentItem">
-              <Border Classes="border">
-                <Grid ColumnDefinitions="Auto,*,Auto">
-                  <CheckBox Grid.Column="0" IsChecked="{Binding Selected}" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                  <StackPanel Grid.Column="1" Spacing="2">
-                    <WrapPanel>
-                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
-                      <TextBlock Text="{Binding StateText}" Opacity="0.6" FontSize="12" IsVisible="{Binding !HighlightRecommended}"/>
-                      <Border Background="{DynamicResource SystemAccentColor}" CornerRadius="3" Padding="6,1" VerticalAlignment="Center" IsVisible="{Binding HighlightRecommended}">
-                        <TextBlock Text="recommended for this PC" FontSize="12" FontWeight="SemiBold"/>
-                      </Border>
-                    </WrapPanel>
-                    <TextBlock Classes="help" Text="{Binding Description}"/>
-                  </StackPanel>
-                  <TextBlock Grid.Column="2" Text="{Binding SizeText}" VerticalAlignment="Center" Opacity="0.8" Margin="12,0,0,0"/>
+              <TextBlock Classes="help" IsVisible="{Binding NotMacFeatures}" Text="Engines this GPU cannot use are greyed. TensorRT: NVIDIA. DirectML: Windows. Vulkan: Linux, any GPU. MIGraphX + HIP: AMD with the native engine and a compatible runtime. OpenVINO: Intel on Linux. Restart playback after changing the engine." />
+              <TextBlock TextWrapping="Wrap" Foreground="Orange" IsVisible="{Binding HasBackendNotice}" Text="{Binding BackendNotice}" />
+              <Border Classes="notice-card" IsVisible="{Binding HasEngineChangeNotice}">
+                <TextBlock Name="EngineChangeNotice" Text="{Binding EngineChangeNotice}" TextWrapping="Wrap"/>
+              </Border>
+            </StackPanel>
+          </Border>
+          <Border Classes="border" IsVisible="{Binding NotMacFeatures}">
+            <StackPanel Spacing="12">
+              <TextBlock Text="Components" FontWeight="SemiBold" FontSize="16" />
+              <TextBlock Text="{Binding ComponentManager.GpuText}" TextWrapping="Wrap"/>
+              <Border Classes="notice-card" IsVisible="{Binding ComponentManager.SetupNeeded}">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                  <materialIcons:MaterialIcon Kind="AlertCircleOutline" Width="20" Height="20" Foreground="Orange" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                  <TextBlock Grid.Column="1" TextWrapping="Wrap" Text="Components recommended for this computer are not installed yet." VerticalAlignment="Center"/>
+                  <Button Grid.Column="2" Content="Install recommended" Classes="accent" Command="{Binding InstallRecommendedComponents}" IsEnabled="{Binding ComponentManager.NotBusy}" VerticalAlignment="Center"/>
                 </Grid>
               </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-        <StackPanel Orientation="Horizontal" Spacing="10">
-          <Button Content="Apply changes" Command="{Binding ComponentManager.Apply}" IsEnabled="{Binding ComponentManager.NotBusy}" Classes="active"/>
-          <Button Content="Refresh" Command="{Binding ComponentManager.Refresh}" IsEnabled="{Binding ComponentManager.NotBusy}"/>
-        </StackPanel>
-        <TextBlock Text="{Binding ComponentManager.StatusLine}" TextWrapping="Wrap" Opacity="0.7"/>
-      </StackPanel>
-<Expander Header="TensorRT engine settings" Name="EngineSettingsExpander" IsVisible="{Binding AnimeJaNaiConf.TensorRtSelected}" IsExpanded="False" HorizontalAlignment="Stretch">
-              <StackPanel Spacing="12" Margin="10,12">
-                <WrapPanel>
-                  <TextBlock Text="Input shape" Width="150" VerticalAlignment="Center" />
-                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TrtStaticOnnxSelected}" Content="From ONNX" Command="{Binding AnimeJaNaiConf.SetTrtStaticOnnx}" />
-                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TrtStaticSelected}" Content="Static" Command="{Binding AnimeJaNaiConf.SetTrtStatic}" />
-                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TrtDynamicSelected}" Content="Dynamic" Command="{Binding AnimeJaNaiConf.SetTrtDynamic}" />
-                </WrapPanel>
-                <WrapPanel IsVisible="{Binding AnimeJaNaiConf.TrtDynamicSelected}">
-                  <TextBlock Text="Minimum / optimal / maximum" Margin="0,0,12,0" VerticalAlignment="Center" />
-                  <TextBox Text="{Binding AnimeJaNaiConf.TrtDynamicMinResolution}" Width="120" />
-                  <TextBox Text="{Binding AnimeJaNaiConf.TrtDynamicOptResolution}" Width="120" Margin="8,0" />
-                  <TextBox Text="{Binding AnimeJaNaiConf.TrtDynamicMaxResolution}" Width="120" />
-                </WrapPanel>
-                <WrapPanel>
-                  <TextBlock Text="Optimization level" Width="150" VerticalAlignment="Center" />
-                  <TextBox Text="{Binding AnimeJaNaiConf.TrtBuilderOptimizationLevel}" Width="100" />
-                </WrapPanel>
-                <TextBlock Classes="help" Text="Static builds for the video resolution. Dynamic covers a resolution range. These settings affect new engines; existing cached engines are kept." />
-                <TextBlock Text="Additional engine arguments" />
-                <TextBox Text="{Binding AnimeJaNaiConf.TrtEngineSettings}" TextWrapping="Wrap" AcceptsReturn="True" />
+              <ItemsControl ItemsSource="{Binding ComponentManager.Packs}" IsEnabled="{Binding ComponentManager.NotBusy}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ComponentItem">
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,6">
+                      <CheckBox Grid.Column="0" IsChecked="{Binding Selected}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                      <StackPanel Grid.Column="1" Spacing="2">
+                        <WrapPanel>
+                          <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                          <TextBlock Text="{Binding StateText}" Opacity="0.6" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center" IsVisible="{Binding !HighlightRecommended}"/>
+                          <Border Background="{DynamicResource SystemAccentColor}" CornerRadius="3" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center" IsVisible="{Binding HighlightRecommended}">
+                            <TextBlock Text="recommended for this PC" FontSize="12" FontWeight="SemiBold" Foreground="White"/>
+                          </Border>
+                        </WrapPanel>
+                        <TextBlock Classes="help" Text="{Binding Description}"/>
+                      </StackPanel>
+                      <TextBlock Grid.Column="2" Text="{Binding SizeText}" VerticalAlignment="Center" Opacity="0.8" Margin="12,0,0,0"/>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Content="Apply changes" Command="{Binding ComponentManager.Apply}" IsEnabled="{Binding ComponentManager.NotBusy}" IsVisible="{Binding !ComponentManager.LoadFailed}" Classes="active"/>
+                <Button Content="Refresh" Command="{Binding ComponentManager.Refresh}" IsEnabled="{Binding ComponentManager.NotBusy}"/>
               </StackPanel>
-            </Expander>
-<views:OptionalEngines DataContext="{Binding}" IsVisible="{Binding NotMacFeatures}"/>
+              <TextBlock Text="{Binding ComponentManager.StatusLine}" TextWrapping="Wrap" Opacity="0.7"/>
+            </StackPanel>
+          </Border>
+          <views:OptionalEngines DataContext="{Binding}" IsVisible="{Binding NotMacFeatures}"/>
+          <StackPanel Spacing="18" IsVisible="{Binding NotMacFeatures}">
+          <Expander Header="TensorRT engine cache" IsVisible="{Binding AnimeJaNaiConf.TensorRtSelected}" IsExpanded="False" HorizontalAlignment="Stretch">
+            <StackPanel Spacing="10" Margin="10,12">
+              <TextBlock Classes="help" TextWrapping="Wrap" Text="Engines are built on the first play of each model and resolution (about a minute each) and kept here. Engines built for another TensorRT version or another GPU can never be loaded again." />
+              <TextBlock Text="{Binding Engines.Summary}" TextWrapping="Wrap"/>
+              <WrapPanel>
+                <Button Content="Delete outdated engines" Command="{Binding Engines.DeleteOutdated}" IsEnabled="{Binding Engines.HasOutdated}" Margin="0,0,8,8"/>
+                <Button Content="{Binding Engines.DeleteAllText}" Command="{Binding Engines.DeleteAll}" IsEnabled="{Binding Engines.HasEngines}" Margin="0,0,8,8"/>
+              </WrapPanel>
+            </StackPanel>
+          </Expander>
+          <Expander Header="TensorRT engine settings (advanced)" Name="EngineSettingsExpander" IsVisible="{Binding AnimeJaNaiConf.TensorRtSelected}" IsExpanded="False" HorizontalAlignment="Stretch">
+            <StackPanel Spacing="12" Margin="10,12">
+              <WrapPanel>
+                <TextBlock Text="Input shape" Width="150" VerticalAlignment="Center" />
+                <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TrtStaticOnnxSelected}" Content="From ONNX" Command="{Binding AnimeJaNaiConf.SetTrtStaticOnnx}" />
+                <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TrtStaticSelected}" Content="Static" Command="{Binding AnimeJaNaiConf.SetTrtStatic}" />
+                <ToggleButton IsChecked="{Binding AnimeJaNaiConf.TrtDynamicSelected}" Content="Dynamic" Command="{Binding AnimeJaNaiConf.SetTrtDynamic}" />
+              </WrapPanel>
+              <WrapPanel IsVisible="{Binding AnimeJaNaiConf.TrtDynamicSelected}">
+                <TextBlock Text="Minimum / optimal / maximum" Margin="0,0,12,0" VerticalAlignment="Center" />
+                <TextBox Text="{Binding AnimeJaNaiConf.TrtDynamicMinResolution}" Width="120" />
+                <TextBox Text="{Binding AnimeJaNaiConf.TrtDynamicOptResolution}" Width="120" Margin="8,0" />
+                <TextBox Text="{Binding AnimeJaNaiConf.TrtDynamicMaxResolution}" Width="120" />
+              </WrapPanel>
+              <WrapPanel>
+                <TextBlock Text="Optimization level" Width="150" VerticalAlignment="Center" />
+                <TextBox Text="{Binding AnimeJaNaiConf.TrtBuilderOptimizationLevel}" Width="100" />
+              </WrapPanel>
+              <TextBlock Classes="help" Text="Static builds for the video resolution. Dynamic covers a resolution range. These settings affect new engines; existing cached engines are kept." />
+              <TextBlock Text="Additional engine arguments" />
+              <TextBox Text="{Binding AnimeJaNaiConf.TrtEngineSettings}" TextWrapping="Wrap" AcceptsReturn="True" />
+            </StackPanel>
+          </Expander>
+          </StackPanel>
         </StackPanel>
       </ScrollViewer>
+
+      <!-- ============================== Settings ============================== -->
       <ScrollViewer Name="SettingsPage" IsVisible="{Binding SettingsSelected}" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Spacing="18" MaxWidth="1100" HorizontalAlignment="Stretch">
-          <StackPanel Spacing="4"><TextBlock Text="Settings" Classes="page-title"/><TextBlock Text="Your display and playback preferences, shared by all profiles." Classes="muted" TextWrapping="Wrap"/></StackPanel>
-<StackPanel Name="GlobalSettingsPanel" MaxWidth="1080" HorizontalAlignment="Stretch" Margin="0" Spacing="12">
-
-
+          <StackPanel Spacing="4"><TextBlock Text="Settings" Classes="page-title"/><TextBlock Text="Your display, HDR and playback preferences, shared by all profiles." Classes="muted" TextWrapping="Wrap"/></StackPanel>
+          <StackPanel Name="GlobalSettingsPanel" MaxWidth="1080" HorizontalAlignment="Stretch" Margin="0" Spacing="12">
             <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding HdrSettings.SaveNotice}" IsVisible="{Binding HdrSettings.HasSaveNotice}" Foreground="Orange" />
-
-
-
             <Border Classes="border" Name="DisplaySettingsPanel">
               <StackPanel Spacing="10">
                 <TextBlock Text="Display" FontWeight="SemiBold" FontSize="16" />
@@ -291,10 +348,24 @@
               </StackPanel>
             </Border>
 
+            <Border Classes="border" Name="HdrConversionPanel">
+              <StackPanel Spacing="10">
+                <TextBlock Text="HDR conversion" FontWeight="SemiBold" FontSize="16" />
+                <TextBlock Classes="help" Text="One setting for every profile: SDR video is converted to HDR after the last processing step, only when the output is HDR." />
+                <WrapPanel>
+                  <ToggleButton Name="HdrModeOff" IsChecked="{Binding HdrSettings.ModeOff}" Content="Off" />
+                  <ToggleButton Name="HdrModeMpv" IsChecked="{Binding HdrSettings.ModeMpv}" Content="Renderer (any GPU)" />
+                  <ToggleButton Name="HdrModeRtx" IsChecked="{Binding HdrSettings.ModeRtx}" Content="NVIDIA TrueHDR" IsEnabled="{Binding TrueHdrSelectable}" ToolTip.Tip="{Binding OptionalSdks.TrueHdrStatus}" />
+                </WrapPanel>
+                <TextBlock Name="HdrModeSummary" Text="{Binding HdrSettings.ModeSummary}" TextWrapping="Wrap" />
+                <TextBlock Name="TrueHdrAvailability" Classes="help" Text="{Binding OptionalSdks.TrueHdrStatus}" TextWrapping="Wrap" IsVisible="{Binding LinuxFeatures}" />
+                <Button Content="Install the TrueHDR SDK…" Classes="secondary" Command="{Binding ShowOptionalEngines}" HorizontalAlignment="Left" IsVisible="{Binding TrueHdrSdkMissing}" />
+              </StackPanel>
+            </Border>
+
             <Border Classes="border">
               <StackPanel Spacing="10">
-                <TextBlock Text="Display HDR appearance" FontWeight="SemiBold" FontSize="16" />
-
+                <TextBlock Text="HDR appearance" FontWeight="SemiBold" FontSize="16" />
                 <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.Enhance}" Content="Enable HDR grading" />
                 <WrapPanel>
                   <TextBlock Text="Appearance" Width="150" VerticalAlignment="Center" />
@@ -305,8 +376,6 @@
                 <TextBlock Classes="help" Text="New installs use Natural. SDR stays SDR while system HDR is off. Ctrl+G compares the configured grade, Natural and grading off." />
                 <Expander Header="Adjust HDR appearance" Name="HdrAppearanceExpander" IsExpanded="False" HorizontalAlignment="Stretch">
                   <StackPanel Spacing="12" Margin="0,12,0,0">
-
-                    <TextBlock Classes="help" TextWrapping="Wrap" IsVisible="{Binding LinuxFeatures}" Text="Add one HDR stage to a profile, then choose mpv HDR or NVIDIA TrueHDR inside that stage. The display controls below describe the screen." />
                     <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.EnhanceNativeHdr}" Content="Also grade native HDR videos" />
                     <WrapPanel>
                       <TextBlock Text="Subtitle white" Width="180" VerticalAlignment="Center" />
@@ -318,18 +387,19 @@
                       <NumericUpDown Value="{Binding HdrSettings.BlackDepth}" Minimum="0" Maximum="80" Increment="5" FormatString="0" Width="120" />
                       <TextBlock Text="%" Margin="6,0" VerticalAlignment="Center" />
                     </WrapPanel>
-
-
                     <WrapPanel>
                       <TextBlock Text="Highlights / vibrance" Width="180" VerticalAlignment="Center" />
                       <NumericUpDown Value="{Binding HdrSettings.HighlightsRtx}" Minimum="0" Maximum="100" Increment="5" FormatString="0" Width="120" />
                       <NumericUpDown Value="{Binding HdrSettings.VibranceRtx}" Minimum="0" Maximum="80" Increment="5" FormatString="0" Width="120" Margin="8,0" />
                       <TextBlock Text="%" VerticalAlignment="Center" />
                     </WrapPanel>
-
-
-
-
+                    <WrapPanel>
+                      <TextBlock Text="Conversion look" Width="180" VerticalAlignment="Center" />
+                      <StackPanel Orientation="Horizontal" Spacing="6"><TextBlock Text="Contrast" VerticalAlignment="Center"/><NumericUpDown Value="{Binding HdrSettings.RtxContrast}" Minimum="0" Maximum="200" Increment="5" FormatString="0" Width="110" /></StackPanel>
+                      <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,0,0,0"><TextBlock Text="Saturation" VerticalAlignment="Center"/><NumericUpDown Value="{Binding HdrSettings.RtxSaturation}" Minimum="0" Maximum="200" Increment="5" FormatString="0" Width="110" /></StackPanel>
+                      <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,0,0,0"><TextBlock Text="Middle grey" VerticalAlignment="Center"/><NumericUpDown Value="{Binding HdrSettings.RtxMiddleGray}" Minimum="10" Maximum="100" Increment="5" FormatString="0" Width="110" /></StackPanel>
+                    </WrapPanel>
+                    <TextBlock Classes="help" Text="Contrast, saturation and middle grey shape the SDR → HDR conversion of both technologies (100 / 100 / 50 is the reference look)." />
                   </StackPanel>
                 </Expander>
               </StackPanel>
@@ -363,14 +433,20 @@
                   <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.AutoDisplayRefresh}" Content="Automatically change display refresh rate (experimental)" />
                 </StackPanel>
                 <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.SmoothMotion}" Content="NVIDIA Smooth Motion (driver frame generation)" IsVisible="{Binding LinuxFeatures}" IsEnabled="{Binding SmoothMotionSelectable}" />
-                <TextBlock Classes="help" TextWrapping="Wrap" IsVisible="{Binding LinuxFeatures}" Text="Smooth Motion needs an NVIDIA GPU and a driver that provides it; it is greyed otherwise. The driver generates one image between two displayed images, on the whole window, subtitles included, after RIFE and the upscaling. Restart the player after changing it. On Windows, set it in the NVIDIA app for this player; AMD and Intel have no equivalent on Linux." />
+                <TextBlock Classes="help" TextWrapping="Wrap" IsVisible="{Binding LinuxFeatures}" Text="Smooth Motion needs an NVIDIA GPU and a driver that provides it; it is greyed otherwise. The driver generates one image between two displayed images, on the whole window, subtitles included, after RIFE and the upscaling. Restart the player after changing it." />
                 <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding HdrSettings.RifeDisplaySync}" Content="Match enabled RIFE profiles to display refresh" />
                 <WrapPanel IsVisible="{Binding HdrSettings.RifeDisplaySync}">
                   <TextBlock Text="Maximum RIFE factor" Width="150" VerticalAlignment="Center" />
                   <NumericUpDown Value="{Binding HdrSettings.RifeMaxFactor}" Minimum="1" Maximum="8" Increment="1" FormatString="0" Width="120" />
                 </WrapPanel>
+                <WrapPanel>
+                  <TextBlock Text="RIFE default mode" Width="150" VerticalAlignment="Center" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeEngineQuality}" Content="Quality" />
+                  <ToggleButton IsChecked="{Binding AnimeJaNaiConf.RifeEngineFast}" Content="Fast" />
+                </WrapPanel>
+                <TextBlock Classes="help" TextWrapping="Wrap" Text="Each interpolation step chooses its own mode; this is the default for steps that do not say." />
+                <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.RifeDrawings}" Content="Spread motion over held drawings (anime holds a drawing for several frames)" />
                 <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding GlobalFidelityNotice}" />
-                <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding EnsemblePrecisionNotice}" />
                 <CheckBox TextBlock.TextWrapping="Wrap" IsChecked="{Binding AnimeJaNaiConf.GpuSubtitles}" Content="Render subtitles on GPU (experimental)" IsVisible="{Binding WindowsFeatures}" />
                 <TextBlock Classes="help" Text="Renderer and experimental playback changes require restarting the player. Frame generation stays off until explicitly enabled." />
                 <Expander Header="RTX Video controls" IsEnabled="{Binding RtxHdrSelectable}" IsExpanded="False">
@@ -385,12 +461,6 @@
                 </Expander>
               </StackPanel>
             </Expander>
-
-            <StackPanel IsVisible="{Binding NotMacFeatures}">
-
-            </StackPanel>
-
-
           </StackPanel>
           <Expander Header="Diagnostics and reference" Name="DiagnosticsExpander" HorizontalAlignment="Stretch" IsExpanded="False">
             <StackPanel Margin="16" Spacing="16">
@@ -398,25 +468,29 @@
               <TextBlock Classes="muted" Text="Ctrl+Alt+H in the player opens the display and HDR diagnosis." TextWrapping="Wrap"/>
               <WrapPanel><Button Content="Run benchmarks" Click="RunBenchmarkButtonClick" Margin="0,0,8,8"/><Button Content="Submit to catalog…" Click="SubmitBenchmarkButtonClick" IsVisible="{Binding NotMacFeatures}" Margin="0,0,0,8"/></WrapPanel>
               <StackPanel Spacing="12">
-        <TextBlock Text="Export playback reference" FontSize="18" FontWeight="SemiBold"/>
-        <TextBlock Text="Choose an open video session. The report describes the playback observed in the player, including its active chain and available file fingerprints. Unsaved settings in this editor are not applied." TextWrapping="Wrap"/>
-        <Button Content="Refresh sessions" Command="{Binding Reference.Refresh}" IsEnabled="{Binding Reference.NotBusy}"/>
-        <ComboBox ItemsSource="{Binding Reference.Sessions}" SelectedItem="{Binding Reference.SelectedSession}" IsEnabled="{Binding Reference.NotBusy}" MinWidth="0" HorizontalAlignment="Stretch">
-          <ComboBox.ItemTemplate>
-            <DataTemplate><TextBlock Text="{ReflectionBinding Label}" TextWrapping="Wrap"/></DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
-        <Button Content="Export reference JSON…" Click="ExportReferenceButtonClick" IsEnabled="{Binding Reference.CanExport}"/>
-        <TextBlock Text="{Binding Reference.Status}" TextWrapping="Wrap"/>
-      </StackPanel>
+                <TextBlock Text="Export playback reference" FontSize="18" FontWeight="SemiBold"/>
+                <TextBlock Text="Choose an open video session. The report describes the playback observed in the player, including its active chain and available file fingerprints. Unsaved settings in this editor are not applied." TextWrapping="Wrap"/>
+                <Button Content="Refresh sessions" Command="{Binding Reference.Refresh}" IsEnabled="{Binding Reference.NotBusy}"/>
+                <ComboBox ItemsSource="{Binding Reference.Sessions}" SelectedItem="{Binding Reference.SelectedSession}" IsEnabled="{Binding Reference.NotBusy}" MinWidth="0" HorizontalAlignment="Stretch">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate><TextBlock Text="{ReflectionBinding Label}" TextWrapping="Wrap"/></DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Content="Export reference JSON…" Click="ExportReferenceButtonClick" IsEnabled="{Binding Reference.CanExport}"/>
+                <TextBlock Text="{Binding Reference.Status}" TextWrapping="Wrap"/>
+              </StackPanel>
             </StackPanel>
           </Expander>
           <Expander Header="Configuration files" HorizontalAlignment="Stretch" IsExpanded="False"><WrapPanel Margin="16"><Button Content="Import configuration…" Click="ImportFullConfButtonClick" Margin="0,0,8,8"/><Button Content="Export configuration…" Click="ExportFullConfButtonClick" Margin="0,0,0,8"/></WrapPanel></Expander>
         </StackPanel>
       </ScrollViewer>
     </Grid>
-    <Border Grid.Row="1" Grid.Column="1" BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="0,1,0,0" Padding="28,10">
-      <StackPanel Spacing="4"><TextBlock Text="{Binding BackendNotice}" IsVisible="{Binding HasBackendNotice}" TextWrapping="Wrap"/><TextBlock Classes="muted" FontSize="11" Text="Changes are saved automatically. Restart playback to apply a different engine." TextWrapping="Wrap"/></StackPanel>
+    <Border Grid.Row="1" Grid.Column="1" BorderBrush="{DynamicResource SubtleBorderBrush}" BorderThickness="0,1,0,0" Padding="28,8">
+      <StackPanel Spacing="2">
+        <TextBlock Name="NewerConfigurationNotice" Text="{Binding NewerConfigurationNotice}" IsVisible="{Binding HasNewerConfigurationNotice}" TextWrapping="Wrap" Foreground="Orange" FontWeight="SemiBold"/>
+        <TextBlock Text="{Binding BackendNotice}" IsVisible="{Binding HasBackendNotice}" TextWrapping="Wrap" Foreground="Orange"/>
+        <TextBlock Classes="muted" FontSize="11" Text="Changes are saved automatically and applied to the running player." TextWrapping="Wrap" IsVisible="{Binding !HasNewerConfigurationNotice}"/>
+      </StackPanel>
     </Border>
   </Grid>
 </Window>

@@ -138,7 +138,11 @@ namespace AnimeJaNaiConfEditor.ViewModels
         {
             if (!UpdaterFound)
             {
-                GpuText = "AnimeJaNaiUpdater.exe not found next to the install - component management unavailable.";
+                GpuText = OperatingSystem.IsWindows()
+                    ? "AnimeJaNaiUpdater.exe was not found next to the installation: component management is unavailable."
+                    : PipelineReaderFeatures.ManagedLink(UpdaterPath)
+                        ? "Component management needs the player: reopen the Manager from the player (its AppImage is not running)."
+                        : "The updater is not next to this installation: component management is unavailable.";
                 LoadFailed = true;
                 return;
             }
