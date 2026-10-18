@@ -354,6 +354,8 @@ public sealed class InterpolationStage : ReactiveObject
     [DataMember] public string Method { get=>_method;set=>Set(ref _method,value); }
     [DataMember] public string Runtime { get=>_runtime;set=>Set(ref _runtime,value); }
     [DataMember] public string Model { get=>_model;set=>Set(ref _model,value); }
+    // The model list writes null while its items are rebuilt: never let that erase the model.
+    public string ModelChoice { get=>_model; set {if(!string.IsNullOrEmpty(value))Model=value;} }
     // ComboBox clears selection while switching its DataContext; preserve the stored policy.
     [DataMember] public string Policy { get=>_policy;set {if(value!=null)Set(ref _policy,value);} }
     [DataMember] public string Numerator { get=>_numerator;set=>Set(ref _numerator,value); }
@@ -586,7 +588,16 @@ public sealed class InterpolationStage : ReactiveObject
     public void Remove()=>_chain.DeleteStage(this);
     private void Set(ref string field,string value,[CallerMemberName] string? name=null) {value??="";if(field==value)return;this.RaiseAndSetIfChanged(ref field,value,name);Changed();}
     private void Changed(){if(!_loading)_chain.ChangedPipeline();}
+    // A refresh asked while bindings are being updated (a list control writing back during
+    // its own update) is posted instead of run inside that update.
+    private bool _refreshing;
     internal void Refresh()
+    {
+        if(_refreshing){Avalonia.Threading.Dispatcher.UIThread.Post(Refresh);return;}
+        _refreshing=true;
+        try{RefreshNow();}finally{_refreshing=false;}
+    }
+    private void RefreshNow()
     {
         _readiness=null;
         foreach(var name in MethodChoices.Append(MethodChoice).Distinct())
@@ -597,7 +608,7 @@ public sealed class InterpolationStage : ReactiveObject
             else if(!MethodChoices.Contains(technology.Name)) {available=false;reason="Imported technology is not available in this Manager.";}
             technology.Update(available,reason);
         }
-        foreach(var name in new[]{nameof(Header),nameof(Summary),nameof(State),nameof(IsBlocked),nameof(IsActive),nameof(StateLabel),nameof(RuntimeLabel),nameof(HasAvailabilityAction),nameof(ActionLabel),nameof(CanUseSelectedBackend),nameof(BackendChangeLabel),nameof(NeedsResizeTechnologyChange),nameof(Category),nameof(MethodChoice),nameof(TechnologyChoices),nameof(SelectedTechnology),nameof(ModelChoices),nameof(IsRife),nameof(IsFruc),nameof(IsUpscale),nameof(IsResize),nameof(HasModel),nameof(IsLegacySizing),nameof(TargetHeight),nameof(TargetPercent),nameof(ResizeUnit),nameof(ResizeValue),nameof(IsInterpolation),nameof(ModeNotice),nameof(PolicyLabel),nameof(PolicyChoice),nameof(FactorPreset),nameof(FactorNote),nameof(ModelNote),nameof(RifeModelLabels),nameof(RifeModelLabel),nameof(OrderDescription),nameof(CanMoveUp),nameof(CanMoveDown),nameof(Availability),nameof(AvailabilityLabel),nameof(CanEnable),nameof(Ensemble),nameof(SceneThreshold),nameof(Frames),nameof(TemporalThreshold),nameof(OptionsText),nameof(TechnologyEditable)})this.RaisePropertyChanged(name);
+        foreach(var name in new[]{nameof(Header),nameof(Summary),nameof(State),nameof(IsBlocked),nameof(IsActive),nameof(StateLabel),nameof(RuntimeLabel),nameof(HasAvailabilityAction),nameof(ActionLabel),nameof(CanUseSelectedBackend),nameof(BackendChangeLabel),nameof(NeedsResizeTechnologyChange),nameof(Category),nameof(MethodChoice),nameof(TechnologyChoices),nameof(SelectedTechnology),nameof(ModelChoices),nameof(ModelChoice),nameof(IsRife),nameof(IsFruc),nameof(IsUpscale),nameof(IsResize),nameof(HasModel),nameof(IsLegacySizing),nameof(TargetHeight),nameof(TargetPercent),nameof(ResizeUnit),nameof(ResizeValue),nameof(IsInterpolation),nameof(ModeNotice),nameof(PolicyLabel),nameof(PolicyChoice),nameof(FactorPreset),nameof(FactorNote),nameof(ModelNote),nameof(RifeModelLabels),nameof(RifeModelLabel),nameof(OrderDescription),nameof(CanMoveUp),nameof(CanMoveDown),nameof(Availability),nameof(AvailabilityLabel),nameof(CanEnable),nameof(Ensemble),nameof(SceneThreshold),nameof(Frames),nameof(TemporalThreshold),nameof(OptionsText),nameof(TechnologyEditable)})this.RaisePropertyChanged(name);
     }
     internal InterpolationPipeline.Stage ToStage()
     {

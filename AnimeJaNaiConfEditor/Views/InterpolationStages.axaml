@@ -85,7 +85,7 @@
               <Grid ColumnDefinitions="140,*" ColumnSpacing="12" IsVisible="{Binding IsUpscale}">
                 <TextBlock Text="Model" VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1" Spacing="4">
-                  <ComboBox Name="StageModel" HorizontalAlignment="Stretch" ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding Model, Mode=TwoWay}" PlaceholderText="Choose an installed model">
+                  <ComboBox Name="StageModel" HorizontalAlignment="Stretch" ItemsSource="{Binding ModelChoices}" SelectedItem="{Binding ModelChoice, Mode=TwoWay}" PlaceholderText="Choose an installed model">
                     <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={x:Static vm:ModelLabelConverter.Instance}}" ToolTip.Tip="{Binding}" /></DataTemplate></ComboBox.ItemTemplate>
                   </ComboBox>
                   <TextBlock Text="{Binding ModelNote}" Classes="help" TextWrapping="Wrap" />
